@@ -92,6 +92,9 @@
       color: #374151;
     }
   </style>
+
+  <!-- JSZip for creating ZIP files in the browser -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
 <body>
   <h1>Batch Image Resizer & Compressor</h1>
@@ -111,6 +114,7 @@
   <div class="card">
     <h2>2. Process & Download</h2>
     <button id="process-btn" class="primary" disabled>Process Images</button>
+    <button id="zip-btn" class="secondary" disabled>Download All as ZIP</button>
     <button id="clear-btn" class="secondary">Clear</button>
     <p class="summary" id="summary"></p>
     <div id="downloads"></div>
@@ -127,6 +131,7 @@
     const fileInput   = document.getElementById("file-input");
     const processBtn  = document.getElementById("process-btn");
     const clearBtn    = document.getElementById("clear-btn");
+    const zipBtn      = document.getElementById("zip-btn");
     const logEl       = document.getElementById("log");
     const fileListEl  = document.getElementById("file-list");
     const downloadsEl = document.getElementById("downloads");
@@ -200,6 +205,7 @@
       downloadsEl.innerHTML = "";
       summaryEl.textContent = "";
       processBtn.disabled = true;
+      zipBtn.disabled = true;
       logEl.textContent = "";
     }
 
@@ -265,7 +271,7 @@
       return { canvas, resizedBlob, resized, width, height, newWidth, newHeight };
     }
 
-    // Compression loop (replicating Python: target = 50% of resized size)
+    // Compression loop (target = 50% of resized size)
     async function compressImageFromCanvas(canvas, resizedBlob) {
       const originalSize = resizedBlob.size;
       const targetSize = originalSize * 0.5; // 50% of resized image size
@@ -296,6 +302,7 @@
       processedResults = [];
       downloadsEl.innerHTML = "";
       summaryEl.textContent = "";
+      zipBtn.disabled = true;
       logEl.textContent = "";
       if (files.length !== filtered.length) {
         log("Some files were ignored (unsupported extension).");
@@ -318,6 +325,7 @@
 
       processBtn.disabled = true;
       clearBtn.disabled = true;
+      zipBtn.disabled = true;
       downloadsEl.innerHTML = "";
       processedResults = [];
       summaryEl.textContent = "";
@@ -362,12 +370,13 @@
           const outputName = replaceExtensionToJpg(file.name);
           const url = URL.createObjectURL(compressedBlob);
 
-          // Remember for summary
+          // Remember for summary & ZIP
           processedResults.push({
             name: outputName,
             originalSize: file.size,
             resizedSize: resizedBlob.size,
             compressedSize: compressedBlob.size,
+            blob: compressedBlob,
             url
           });
 
@@ -411,6 +420,43 @@
       log("\nAll images processed.");
       processBtn.disabled = false;
       clearBtn.disabled = false;
+
+      if (processedResults.length > 0) {
+        zipBtn.disabled = false;
+      }
+    });
+
+    zipBtn.addEventListener("click", async () => {
+      if (processedResults.length === 0) return;
+
+      zipBtn.disabled = true;
+      const originalLabel = zipBtn.textContent;
+      zipBtn.textContent = "Preparing ZIP...";
+
+      try {
+        const zip = new JSZip();
+        processedResults.forEach(result => {
+          zip.file(result.name, result.blob);
+        });
+
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(zipBlob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "compressed_images.zip";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        // Revoke URL after a short delay
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      } catch (err) {
+        log(`Error creating ZIP: ${err.message || err}`);
+      } finally {
+        zipBtn.textContent = originalLabel;
+        zipBtn.disabled = false;
+      }
     });
   </script>
 </body>
