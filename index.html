@@ -102,11 +102,15 @@
       font-size: 0.9rem;
     }
     .controls-row input[type="number"] {
-      width: 100px;
+      width: 90px;
       padding: 0.25rem 0.4rem;
       border-radius: 6px;
       border: 1px solid #d1d5db;
       font-size: 0.9rem;
+    }
+    .hint {
+      font-size: 0.85rem;
+      color: #6b7280;
     }
   </style>
 
@@ -116,31 +120,52 @@
 <body>
   <h1>Batch Image Resizer & Compressor</h1>
   <p>
-    Client-side implementation of your Python script:
-    resize images whose width or height exceeds the configured max side length,
-    convert to JPG, then iteratively compress until the file is ≤
-    <strong>50%</strong> of the resized size or quality reaches 10.
+    Client-side implementation of your Python script:<br />
+    • Resize images whose width or height exceeds the configured limits<br />
+    • Convert to JPG and flatten transparency<br />
+    • Iteratively compress until the file is ≤ a configurable % of the resized size
+      or quality reaches 10.
   </p>
 
   <div class="card">
-    <h2>1. Select Images</h2>
+    <h2>1. Select Images & Parameters</h2>
     <p>Supported formats: <strong>.png, .jpg, .jpeg</strong></p>
     <input id="file-input" type="file" multiple accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
 
     <div class="controls-row">
-      <label for="max-side-input">
-        Max side length (px):
-      </label>
+      <label for="max-width-input">Max width (px):</label>
       <input
-        id="max-side-input"
+        id="max-width-input"
         type="number"
         min="100"
         max="10000"
-        step="10"
+        step="1"
         value="1800"
       />
-      <span style="font-size:0.85rem;color:#6b7280;">
-        Images larger than this will be resized so the longest side equals this value.
+
+      <label for="max-height-input">Max height (px):</label>
+      <input
+        id="max-height-input"
+        type="number"
+        min="100"
+        max="10000"
+        step="1"
+        value="1800"
+      />
+    </div>
+
+    <div class="controls-row">
+      <label for="target-percent-input">Target size (% of resized):</label>
+      <input
+        id="target-percent-input"
+        type="number"
+        min="1"
+        max="100"
+        step="1"
+        value="50"
+      />
+      <span class="hint">
+        Example: 50 means compressed file ≈ 50% of resized file size.
       </span>
     </div>
 
@@ -162,20 +187,24 @@
   </div>
 
   <script>
-    // --- Helpers -------------------------------------------------------------
+    // --- DOM references ------------------------------------------------------
 
-    const fileInput     = document.getElementById("file-input");
-    const maxSideInput  = document.getElementById("max-side-input");
-    const processBtn    = document.getElementById("process-btn");
-    const clearBtn      = document.getElementById("clear-btn");
-    const zipBtn        = document.getElementById("zip-btn");
-    const logEl         = document.getElementById("log");
-    const fileListEl    = document.getElementById("file-list");
-    const downloadsEl   = document.getElementById("downloads");
-    const summaryEl     = document.getElementById("summary");
+    const fileInput           = document.getElementById("file-input");
+    const maxWidthInput       = document.getElementById("max-width-input");
+    const maxHeightInput      = document.getElementById("max-height-input");
+    const targetPercentInput  = document.getElementById("target-percent-input");
+    const processBtn          = document.getElementById("process-btn");
+    const clearBtn            = document.getElementById("clear-btn");
+    const zipBtn              = document.getElementById("zip-btn");
+    const logEl               = document.getElementById("log");
+    const fileListEl          = document.getElementById("file-list");
+    const downloadsEl         = document.getElementById("downloads");
+    const summaryEl           = document.getElementById("summary");
 
     let selectedFiles = [];
     let processedResults = [];
+
+    // --- Logging & utility helpers ------------------------------------------
 
     function log(message) {
       logEl.textContent += message + "\n";
@@ -246,6 +275,43 @@
       logEl.textContent = "";
     }
 
+    // --- Input validation ----------------------------------------------------
+
+    function getValidatedMaxWidth() {
+      const val = parseInt(maxWidthInput.value, 10);
+      if (isNaN(val) || !Number.isInteger(val) || val <= 0) {
+        throw new Error("Max width must be a positive integer.");
+      }
+      if (val < 100 || val > 10000) {
+        throw new Error("Max width must be between 100 and 10000 pixels.");
+      }
+      return val;
+    }
+
+    function getValidatedMaxHeight() {
+      const val = parseInt(maxHeightInput.value, 10);
+      if (isNaN(val) || !Number.isInteger(val) || val <= 0) {
+        throw new Error("Max height must be a positive integer.");
+      }
+      if (val < 100 || val > 10000) {
+        throw new Error("Max height must be between 100 and 10000 pixels.");
+      }
+      return val;
+    }
+
+    function getValidatedTargetPercent() {
+      const val = parseInt(targetPercentInput.value, 10);
+      if (isNaN(val) || !Number.isInteger(val)) {
+        throw new Error("Target size must be an integer percentage.");
+      }
+      if (val < 1 || val > 100) {
+        throw new Error("Target size percentage must be between 1 and 100.");
+      }
+      return val;
+    }
+
+    // --- File handling -------------------------------------------------------
+
     // Read file as Image
     function loadImageFromFile(file) {
       return new Promise((resolve, reject) => {
@@ -271,31 +337,19 @@
       });
     }
 
-    // Get max side from UI, with basic validation & fallback
-    function getMaxSide() {
-      const val = parseInt(maxSideInput.value, 10);
-      if (isNaN(val) || val <= 0) return 1800;
-      // Clamp to a reasonable range
-      return Math.min(Math.max(val, 100), 10000);
-    }
-
-    // Resize according to your rules (now configurable maxSide)
-    async function resizeImageBrowser(img, maxSide) {
+    // Resize according to max width/height, keeping aspect ratio
+    async function resizeImageBrowser(img, maxWidth, maxHeight) {
       let { width, height } = img;
       let newWidth = width;
       let newHeight = height;
       let resized = false;
 
-      if (width > maxSide || height > maxSide) {
-        if (width > height) {
-          newWidth = maxSide;
-          const scale = newWidth / width;
-          newHeight = Math.round(height * scale);
-        } else {
-          newHeight = maxSide;
-          const scale = newHeight / height;
-          newWidth = Math.round(width * scale);
-        }
+      if (width > maxWidth || height > maxHeight) {
+        const scaleW = maxWidth / width;
+        const scaleH = maxHeight / height;
+        const scale = Math.min(scaleW, scaleH);
+        newWidth = Math.round(width * scale);
+        newHeight = Math.round(height * scale);
         resized = true;
       }
 
@@ -304,21 +358,22 @@
       canvas.height = newHeight;
       const ctx = canvas.getContext("2d");
 
-      // Flatten transparency to white (like converting RGBA → RGB)
+      // Flatten transparency to white (equivalent to RGBA -> RGB)
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, newWidth, newHeight);
       ctx.drawImage(img, 0, 0, newWidth, newHeight);
 
-      // Save as JPEG with quality 85 (equivalent to script)
+      // Save as JPEG with quality 85
       const resizedBlob = await canvasToBlob(canvas, "image/jpeg", 0.85);
 
       return { canvas, resizedBlob, resized, width, height, newWidth, newHeight };
     }
 
-    // Compression loop (target = 50% of resized size)
-    async function compressImageFromCanvas(canvas, resizedBlob) {
+    // Compression loop (target = targetPercent% of resized size)
+    async function compressImageFromCanvas(canvas, resizedBlob, targetPercent) {
       const originalSize = resizedBlob.size;
-      const targetSize = originalSize * 0.5; // 50% of resized image size
+      const targetRatio = targetPercent / 100;
+      const targetSize = originalSize * targetRatio;
       let quality = 0.8; // start at 80
       let compressedBlob = resizedBlob; // fallback
       while (true) {
@@ -348,6 +403,7 @@
       summaryEl.textContent = "";
       zipBtn.disabled = true;
       logEl.textContent = "";
+
       if (files.length !== filtered.length) {
         log("Some files were ignored (unsupported extension).");
       }
@@ -367,8 +423,22 @@
     processBtn.addEventListener("click", async () => {
       if (selectedFiles.length === 0) return;
 
-      const maxSide = getMaxSide();
-      log(`Using max side length: ${maxSide}px`);
+      // Validate parameters
+      let maxWidth, maxHeight, targetPercent;
+      try {
+        maxWidth = getValidatedMaxWidth();
+        maxHeight = getValidatedMaxHeight();
+        targetPercent = getValidatedTargetPercent();
+      } catch (err) {
+        log("Parameter error: " + err.message);
+        alert(err.message);
+        return;
+      }
+
+      log(
+        `Using max width: ${maxWidth}px, max height: ${maxHeight}px, ` +
+        `target size: ${targetPercent}% of resized file size.`
+      );
 
       processBtn.disabled = true;
       clearBtn.disabled = true;
@@ -376,7 +446,6 @@
       downloadsEl.innerHTML = "";
       processedResults = [];
       summaryEl.textContent = "";
-      logEl.textContent = logEl.textContent; // keep previous logs about selection
       log(`Starting processing of ${selectedFiles.length} image(s)...`);
 
       let totalOriginal = 0;
@@ -399,7 +468,7 @@
             height,
             newWidth,
             newHeight
-          } = await resizeImageBrowser(img, maxSide);
+          } = await resizeImageBrowser(img, maxWidth, maxHeight);
 
           const resizedKB = bytesToKB(resizedBlob.size);
           if (resized) {
@@ -408,11 +477,11 @@
             log(`No resize needed (${width}x${height}), saved as JPEG ~ ${resizedKB}`);
           }
 
-          const compressedBlob = await compressImageFromCanvas(canvas, resizedBlob);
+          const compressedBlob = await compressImageFromCanvas(canvas, resizedBlob, targetPercent);
           const compressedKB = bytesToKB(compressedBlob.size);
           totalCompressed += compressedBlob.size;
 
-          log(`Compressed to ~ ${compressedKB} (target <= 50% of resized size)`);
+          log(`Compressed to ~ ${compressedKB} (target <= ${targetPercent}% of resized size)`);
 
           const outputName = replaceExtensionToJpg(file.name);
           const url = URL.createObjectURL(compressedBlob);
