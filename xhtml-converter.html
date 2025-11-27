@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Text → XHTML (with image db) – Toolbox</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      background: #f5f5f5;
+      color: #111827;
+    }
+    h1 {
+      margin-top: 0;
+      margin-bottom: 0.25rem;
+    }
+    .subtitle {
+      margin-top: 0;
+      margin-bottom: 1.5rem;
+      color: #6b7280;
+      font-size: 0.95rem;
+    }
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      margin-bottom: 1.5rem;
+    }
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1.1rem;
+      font-size: 0.95rem;
+      margin-right: 0.5rem;
+    }
+    button.primary {
+      background: #2563eb;
+      color: #fff;
+    }
+    button.secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    input[type="file"] {
+      margin: 0.75rem 0;
+    }
+    .summary {
+      font-size: 0.9rem;
+      margin-top: 0.5rem;
+      color: #374151;
+    }
+    .log {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      white-space: pre-wrap;
+      background: #111827;
+      color: #e5e7eb;
+      padding: 1rem;
+      border-radius: 8px;
+      max-height: 260px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+    }
+    a.back {
+      display: inline-block;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+      text-decoration: none;
+      color: #2563eb;
+    }
+  </style>
+  <!-- JSZip for ZIP creation -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <!-- PapaParse for CSV parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+</head>
+<body>
+  <a class="back" href="index.html">← Back to Toolbox</a>
+  <h1>Text → XHTML (with image db)</h1>
+  <p class="subtitle">
+    Browser-based version of your text-to-XHTML formatter. Upload an image database CSV and multiple
+    .txt files; get EPUB-style XHTML files as a ZIP. Everything runs locally.
+  </p>
+
+  <div class="card">
+    <h2>1. Upload image db CSV</h2>
+    <p>
+      CSV columns expected: <code>filename,type,alt,caption</code><br/>
+      <code>filename</code> should match markers like <code>[image-01.jpg]</code> inside your .txt files.
+    </p>
+    <input id="csv-input" type="file" accept=".csv,text/csv" />
+    <p class="summary" id="csv-summary"></p>
+  </div>
+
+  <div class="card">
+    <h2>2. Upload text files</h2>
+    <p>Upload one or more UTF-8 <strong>.txt</strong> chapter files.</p>
+    <input id="txt-input" type="file" multiple accept=".txt,text/plain" />
+    <p class="summary" id="txt-summary"></p>
+  </div>
+
+  <div class="card">
+    <h2>3. Convert & Download</h2>
+    <button id="convert-btn" class="primary" disabled>Convert & Download ZIP</button>
+    <button id="clear-btn" class="secondary">Clear</button>
+    <p class="summary" id="convert-summary"></p>
+  </div>
+
+  <div class="card">
+    <h2>Logs</h2>
+    <div class="log" id="log"></div>
+  </div>
+
+  <script>
+    const csvInput          = document.getElementById("csv-input");
+    const txtInput          = document.getElementById("txt-input");
+    const convertBtn        = document.getElementById("convert-btn");
+    const clearBtn          = document.getElementById("clear-btn");
+    const csvSummaryEl      = document.getElementById("csv-summary");
+    const txtSummaryEl      = document.getElementById("txt-summary");
+    const convertSummaryEl  = document.getElementById("convert-summary");
+    const logEl             = document.getElementById("log");
+
+    let imageTypes = null;         // { filename: {type, alt, caption}, ... }
+    let selectedTxtFiles = [];     // Array<File>
+
+    function log(msg) {
+      logEl.textContent += msg + "\n";
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function removeInvisibleChars(str) {
+      return str.replace(/[\u200B\u200C\u200D\uFEFF]/g, "");
+    }
+
+    function containsHtmlTags(line) {
+      const htmlTagPattern = /<\/?([a-z][a-z0-9]*)\b[^>]*\/?>/i;
+      return htmlTagPattern.test(line);
+    }
+
+    function updateConvertButtonState() {
+      convertBtn.disabled = !(imageTypes && selectedTxtFiles.length > 0);
+    }
+
+    // ---------- CSV handling ----------
+    csvInput.addEventListener("change", () => {
+      const file = csvInput.files && csvInput.files[0];
+      imageTypes = null;
+      csvSummaryEl.textContent = "";
+      logEl.textContent = "";
+
+      if (!file) {
+        log("No CSV file selected.");
+        updateConvertButtonState();
+        return;
+      }
+
+      log(`Reading CSV: ${file.name} ...`);
+
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        encoding: "utf-8",
+        complete: (results) => {
+          if (results.errors && results.errors.length) {
+            log("CSV parse errors:");
+            results.errors.forEach(e => log("  - " + e.message));
+          }
+
+          const rows = results.data || [];
+          const dict = {};
+          let count = 0;
+
+          rows.forEach(row => {
+            const filename = (row.filename || "").trim();
+            if (!filename) return;
+            dict[filename] = {
+              type: (row.type || "").trim(),
+              alt: (row.alt || "").trim(),
+              caption: (row.caption || "").trim(),
+            };
+            count++;
+          });
+
+          imageTypes = dict;
+          csvSummaryEl.textContent = `Loaded ${count} image record(s) from CSV.`;
+          log(`Loaded ${count} image record(s) from CSV.`);
+          updateConvertButtonState();
+        },
+        error: (err) => {
+          log("Error reading CSV: " + (err.message || err));
+          imageTypes = null;
+          updateConvertButtonState();
+        }
+      });
+    });
+
+    // ---------- Text file handling ----------
+    txtInput.addEventListener("change", () => {
+      const files = Array.from(txtInput.files || []);
+      selectedTxtFiles = files;
+      txtSummaryEl.textContent = "";
+      logEl.textContent = "";
+
+      if (files.length === 0) {
+        log("No text files selected.");
+        updateConvertButtonState();
+        return;
+      }
+
+      txtSummaryEl.textContent = `Selected ${files.length} text file(s).`;
+      log(`Selected ${files.length} text file(s):`);
+      files.forEach(f => log("  - " + f.name));
+
+      updateConvertButtonState();
+    });
+
+    clearBtn.addEventListener("click", () => {
+      csvInput.value = "";
+      txtInput.value = "";
+      imageTypes = null;
+      selectedTxtFiles = [];
+      csvSummaryEl.textContent = "";
+      txtSummaryEl.textContent = "";
+      convertSummaryEl.textContent = "";
+      logEl.textContent = "";
+      updateConvertButtonState();
+    });
+
+    function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = err => reject(err);
+        reader.readAsText(file, "utf-8");
+      });
+    }
+
+    // ---------- Core conversion logic (JS port of your Python algorithm) ----------
+    function convertSingleTxtToXhtml(text, imageTypes) {
+      const lines = text.split(/\r?\n/);
+      if (!lines.length) {
+        throw new Error("Input text is empty");
+      }
+
+      let escapedTitle = "";
+      let image_type = ""; // track last image type
+
+      const firstLineRaw = removeInvisibleChars((lines[0] || "").trim());
+      let h1Header = "";
+      log(`  First line: ${firstLineRaw}`);
+
+      const firstHasHtml = containsHtmlTags(firstLineRaw);
+      log(`  contains_html_tags=${firstHasHtml}`);
+
+      if (firstHasHtml && /^<h\d\b/i.test(firstLineRaw)) {
+        // already a heading
+        h1Header = firstLineRaw;
+      } else if (firstLineRaw.length > 0 && firstLineRaw.length < 20) {
+        // treat as title
+        escapedTitle = escapeHtml(firstLineRaw);
+        h1Header = `<h2>${escapedTitle}</h2>`;
+      } else {
+        escapedTitle = "";
+      }
+
+      const imageMarkerRegex = /^\[image[- ]([a-zA-Z]?\d{1,3}[a-zA-Z]?)\.[a-zA-Z0-9]+\]$/i;
+
+      // Decide whether first line is content (image marker or no header)
+      let formattedLines = [];
+      let contentLines;
+      if (imageMarkerRegex.test(firstLineRaw) || h1Header === "") {
+        formattedLines = [];
+        contentLines = lines;
+      } else {
+        formattedLines = [h1Header];
+        contentLines = lines.slice(1);
+      }
+
+      let index = 0;
+      let insideLyric = false;
+      let lyricBlock = [];
+
+      while (index < contentLines.length) {
+        let line = removeInvisibleChars((contentLines[index] || "").trim());
+
+        // lyric start / end
+        if (line === "[lyric start]") {
+          insideLyric = true;
+          index++;
+          continue;
+        } else if (line === "[lyric end]") {
+          if (lyricBlock.length) {
+            formattedLines.push('<div class="songgroup">\n');
+            formattedLines.push(...lyricBlock);
+            formattedLines.push('</div>\n');
+            lyricBlock = [];
+          }
+          insideLyric = false;
+          index++;
+          continue;
+        }
+
+        if (insideLyric) {
+          if (line === "") {
+            if (lyricBlock.length) {
+              formattedLines.push('<div class="songgroup">\n');
+              formattedLines.push(...lyricBlock);
+              formattedLines.push('</div>\n');
+              lyricBlock = [];
+            }
+          } else {
+            lyricBlock.push(`<p class="noindent">${escapeHtml(line)}</p>\n`);
+          }
+          index++;
+          continue;
+        }
+
+        // separator "＊＊＊"
+        if (line === "＊＊＊") {
+          formattedLines.push('<p class="align-center m-top-1em m-bottom-1em">＊＊＊</p>\n');
+          index++;
+          continue;
+        }
+
+        // existing HTML lines
+        if (containsHtmlTags(line)) {
+          formattedLines.push(line + "\n");
+          index++;
+          continue;
+        }
+
+        // image markers
+        if (imageMarkerRegex.test(line)) {
+          const imageFilename = line.slice(1, -1); // remove [ ]
+          const info = imageTypes[imageFilename];
+
+          if (!info) {
+            formattedLines.push(`<p>${escapeHtml(line)}</p>\n`);
+            index++;
+            continue;
+          }
+
+          image_type = info.type || "";
+          const alt = escapeHtml(info.alt || "");
+          const caption = escapeHtml(info.caption || "");
+
+          if (image_type === "1") {
+            // normal photo
+            const htmlBlock =
+              `<div class="photo">\n` +
+              `<img class="fit" src="../Images/${escapeHtml(imageFilename)}" alt="${alt}"/>\n` +
+              `<div class="caption">${caption}</div>\n` +
+              `</div>`;
+            formattedLines.push(htmlBlock);
+            index++;
+            continue;
+          } else if (image_type === "2") {
+            // fixed width SVG / fixed layout
+            const svgLines = [
+              '<div class="main">\n',
+              '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" width="100%" height="100%" viewBox="0 0 1333 2000">',
+              `\t<image width="1333" height="2000" xlink:href="../Images/${escapeHtml(imageFilename)}"/>\n`,
+              '\t</svg></div>\n'
+            ];
+            formattedLines.push(...svgLines);
+            index++;
+            continue;
+          } else if (image_type === "3") {
+            const block =
+              `<figure class="float-left width-030per p-right-1em">\n` +
+              `<img src="../Images/${escapeHtml(imageFilename)}" class="fit width-30per" alt="${alt}"/>\n` +
+              `<figcaption>${caption}</figcaption>\n` +
+              `</figure>\n`;
+            formattedLines.push(block);
+            index++;
+            continue;
+          } else if (image_type === "4") {
+            const block =
+              `<figure class="float-right width-040per p-left-1em">\n` +
+              `<img src="../Images/${escapeHtml(imageFilename)}" class="fit width-40per" alt="${alt}"/>\n` +
+              `<figcaption>${caption}</figcaption>\n` +
+              `</figure>\n`;
+            formattedLines.push(block);
+            index++;
+            continue;
+          } else if (image_type === "5") {
+            const block =
+              `<figure class="p-bottom-1em">\n` +
+              `<img src="../Images/${escapeHtml(imageFilename)}" alt="${alt}"/>\n` +
+              `<figcaption>${caption}</figcaption>\n` +
+              `</figure>\n`;
+            formattedLines.push(block);
+            index++;
+            continue;
+          }
+        }
+
+        // default paragraph
+        if (line) {
+          formattedLines.push(`<p>${escapeHtml(line)}</p>\n`);
+        }
+        index++;
+      }
+
+      const bodyContent = formattedLines.join("\n");
+
+      let htmlContent;
+      if (image_type === "2") {
+        // fixed-layout template
+        htmlContent =
+          '<?xml version="1.0" encoding="UTF-8"?>\n' +
+          '<!DOCTYPE html>\n' +
+          '<html xmlns="http://www.w3.org/1999/xhtml" ' +
+          'xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="zh-TW" lang="zh-TW">\n' +
+          '<head>\n' +
+          '<meta charset="UTF-8"/>\n' +
+          `<title>${escapedTitle}</title>\n` +
+          '<link rel="stylesheet" type="text/css" href="../Styles/fixed-layout.css"/>\n' +
+          '<meta name="viewport" content="width=1333, height=2000"/>' +
+          '</head>\n' +
+          `<body>\n${bodyContent}\n</body>\n</html>`;
+      } else {
+        // reflowable template
+        htmlContent =
+          '<?xml version="1.0" encoding="UTF-8"?>\n' +
+          '<!DOCTYPE html>\n' +
+          '<html xmlns="http://www.w3.org/1999/xhtml" ' +
+          'xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="zh-TW" lang="zh-TW" class="hltr">\n' +
+          '<head>\n' +
+          '<meta charset="UTF-8"/>\n' +
+          `<title>${escapedTitle}</title>\n` +
+          '<link rel="stylesheet" type="text/css" href="../Styles/book-style.css"/>\n' +
+          '</head>\n' +
+          `<body>\n${bodyContent}\n</body>\n</html>`;
+      }
+
+      return htmlContent;
+    }
+
+    // ---------- Convert & ZIP ----------
+    convertBtn.addEventListener("click", async () => {
+      if (!imageTypes || selectedTxtFiles.length === 0) return;
+
+      convertBtn.disabled = true;
+      clearBtn.disabled = true;
+      convertSummaryEl.textContent = "";
+      logEl.textContent = "";
+
+      log(`Starting conversion for ${selectedTxtFiles.length} file(s)...`);
+
+      try {
+        const zip = new JSZip();
+        let successCount = 0;
+
+        for (const file of selectedTxtFiles) {
+          log(`\nProcessing: ${file.name}`);
+          const text = await readFileAsText(file);
+          try {
+            const xhtml = convertSingleTxtToXhtml(text, imageTypes);
+            const baseName = file.name.replace(/\.[^.]+$/, "");
+            const outName = `${baseName}.xhtml`;
+            zip.file(outName, xhtml);
+            log(`  → Generated ${outName}`);
+            successCount++;
+          } catch (errInner) {
+            log(`  Error converting "${file.name}": ${errInner.message || errInner}`);
+          }
+        }
+
+        if (successCount === 0) {
+          log("No XHTML files generated. Aborting ZIP.");
+          convertBtn.disabled = false;
+          clearBtn.disabled = false;
+          return;
+        }
+
+        log(`\nCreating ZIP with ${successCount} XHTML file(s)...`);
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(zipBlob);
+
+        const zipName = "xhtml_output.zip";
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = zipName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+        convertSummaryEl.textContent =
+          `Done. Created ${successCount} XHTML file(s) and downloaded as "${zipName}".`;
+        log("ZIP created and download triggered.");
+      } catch (err) {
+        log("Error during conversion: " + (err.message || err));
+        alert("Error: " + (err.message || err));
+      } finally {
+        convertBtn.disabled = false;
+        clearBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
