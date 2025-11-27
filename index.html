@@ -2,19 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Batch Image Resizer & Compressor</title>
+  <title>Toolbox – Image Compression & HTML Text Extractor</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
+    /* Layout & base styles */
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      max-width: 900px;
+      max-width: 960px;
       margin: 0 auto;
       padding: 1.5rem;
       background: #f5f5f5;
-      color: #333;
+      color: #111827;
     }
     h1 {
       margin-top: 0;
+      margin-bottom: 0.25rem;
+    }
+    .subtitle {
+      margin-top: 0;
+      margin-bottom: 1.5rem;
+      color: #6b7280;
+      font-size: 0.95rem;
     }
     .card {
       background: #fff;
@@ -23,9 +31,40 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.06);
       margin-bottom: 1.5rem;
     }
-    input[type="file"] {
-      margin: 0.75rem 0;
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      border-radius: 999px;
+      background: #e5e7eb;
+      padding: 0.25rem;
+      margin-bottom: 1rem;
+      gap: 0.25rem;
+      max-width: 420px;
     }
+    .tab-btn {
+      flex: 1;
+      border: none;
+      border-radius: 999px;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      background: transparent;
+      color: #4b5563;
+    }
+    .tab-btn.active {
+      background: #111827;
+      color: #f9fafb;
+    }
+
+    .tool-section {
+      display: none;
+    }
+    .tool-section.active {
+      display: block;
+    }
+
+    /* Buttons & inputs */
     button {
       cursor: pointer;
       border: none;
@@ -46,17 +85,37 @@
       opacity: 0.6;
       cursor: default;
     }
-    .log {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      white-space: pre-wrap;
-      background: #111827;
-      color: #e5e7eb;
-      padding: 1rem;
-      border-radius: 8px;
-      max-height: 260px;
-      overflow-y: auto;
-      font-size: 0.85rem;
+
+    input[type="file"] {
+      margin: 0.75rem 0;
     }
+    input[type="number"],
+    input[type="text"] {
+      padding: 0.25rem 0.4rem;
+      border-radius: 6px;
+      border: 1px solid #d1d5db;
+      font-size: 0.9rem;
+    }
+
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-top: 0.5rem;
+    }
+    .controls-row label {
+      font-size: 0.9rem;
+    }
+    .controls-row input[type="number"] {
+      width: 90px;
+    }
+    .hint {
+      font-size: 0.85rem;
+      color: #6b7280;
+    }
+
+    /* Lists & logs */
     .file-list {
       margin-top: 0.5rem;
       font-size: 0.9rem;
@@ -80,6 +139,17 @@
       color: #374151;
       margin-left: 0.4rem;
     }
+    .log {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      white-space: pre-wrap;
+      background: #111827;
+      color: #e5e7eb;
+      padding: 1rem;
+      border-radius: 8px;
+      max-height: 260px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+    }
     a.download-link {
       font-size: 0.85rem;
       text-decoration: none;
@@ -91,124 +161,181 @@
       margin-top: 0.5rem;
       color: #374151;
     }
-    .controls-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-      align-items: center;
-      margin-top: 0.5rem;
-    }
-    .controls-row label {
-      font-size: 0.9rem;
-    }
-    .controls-row input[type="number"] {
-      width: 90px;
-      padding: 0.25rem 0.4rem;
-      border-radius: 6px;
-      border: 1px solid #d1d5db;
-      font-size: 0.9rem;
-    }
-    .hint {
-      font-size: 0.85rem;
-      color: #6b7280;
+
+    @media (max-width: 640px) {
+      body {
+        padding: 1rem;
+      }
     }
   </style>
 
-  <!-- JSZip for creating ZIP files in the browser -->
+  <!-- JSZip for creating ZIP files in the browser (image compression) -->
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
 <body>
-  <h1>Batch Image Resizer & Compressor</h1>
-  <p>
-    Client-side implementation of your Python script:<br />
-    • Resize images whose width or height exceeds the configured limits<br />
-    • Convert to JPG and flatten transparency<br />
-    • Iteratively compress until the file is ≤ a configurable % of the resized size
-      or quality reaches 10.
+  <h1>Toolbox</h1>
+  <p class="subtitle">
+    Two browser-only tools: <strong>Image Compression</strong> and <strong>Extract Text from HTML</strong>.
+    All processing is local – nothing is uploaded to a server.
   </p>
 
-  <div class="card">
-    <h2>1. Select Images & Parameters</h2>
-    <p>Supported formats: <strong>.png, .jpg, .jpeg</strong></p>
-    <input id="file-input" type="file" multiple accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
+  <div class="tabs">
+    <button class="tab-btn active" data-tool="images">Image Compression</button>
+    <button class="tab-btn" data-tool="html">Extract Text from HTML</button>
+  </div>
 
-    <div class="controls-row">
-      <label for="max-width-input">Max width (px):</label>
-      <input
-        id="max-width-input"
-        type="number"
-        min="100"
-        max="10000"
-        step="1"
-        value="1800"
-      />
+  <!-- ===================== IMAGE COMPRESSION TOOL ====================== -->
+  <section id="tool-images" class="tool-section active">
+    <div class="card">
+      <h2>Image Compression</h2>
+      <p>
+        Resize and compress multiple images in the browser. Outputs JPGs and lets you download them
+        individually or as a ZIP file.
+      </p>
 
-      <label for="max-height-input">Max height (px):</label>
-      <input
-        id="max-height-input"
-        type="number"
-        min="100"
-        max="10000"
-        step="1"
-        value="1800"
-      />
+      <div class="card" style="margin-top:1rem;">
+        <h3>1. Select Images & Parameters</h3>
+        <p>Supported formats: <strong>.png, .jpg, .jpeg</strong></p>
+        <input id="img-file-input" type="file" multiple accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
+
+        <div class="controls-row">
+          <label for="max-width-input">Max width (px):</label>
+          <input
+            id="max-width-input"
+            type="number"
+            min="100"
+            max="10000"
+            step="1"
+            value="1800"
+          />
+
+          <label for="max-height-input">Max height (px):</label>
+          <input
+            id="max-height-input"
+            type="number"
+            min="100"
+            max="10000"
+            step="1"
+            value="1800"
+          />
+        </div>
+
+        <div class="controls-row">
+          <label for="target-percent-input">Target size (% of resized):</label>
+          <input
+            id="target-percent-input"
+            type="number"
+            min="1"
+            max="100"
+            step="1"
+            value="50"
+          />
+          <span class="hint">
+            Example: 50 → compressed file ≈ 50% of resized file size.
+          </span>
+        </div>
+
+        <div class="file-list" id="img-file-list"></div>
+      </div>
+
+      <div class="card">
+        <h3>2. Process & Download</h3>
+        <button id="process-images-btn" class="primary" disabled>Process Images</button>
+        <button id="zip-images-btn" class="secondary" disabled>Download All as ZIP</button>
+        <button id="clear-images-btn" class="secondary">Clear</button>
+        <p class="summary" id="img-summary"></p>
+        <div id="img-downloads"></div>
+      </div>
+
+      <div class="card">
+        <h3>Logs</h3>
+        <div class="log" id="img-log"></div>
+      </div>
     </div>
+  </section>
 
-    <div class="controls-row">
-      <label for="target-percent-input">Target size (% of resized):</label>
-      <input
-        id="target-percent-input"
-        type="number"
-        min="1"
-        max="100"
-        step="1"
-        value="50"
-      />
-      <span class="hint">
-        Example: 50 means compressed file ≈ 50% of resized file size.
-      </span>
+  <!-- ===================== HTML TEXT EXTRACTOR TOOL ==================== -->
+  <section id="tool-html" class="tool-section">
+    <div class="card">
+      <h2>Extract Text from HTML</h2>
+      <p>
+        Browser-based port of your BeautifulSoup script:
+        <br>• walks through <code>h1–h6, p, footer, sup, small, b, i, u, img</code> in document order
+        <br>• preserves <code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;u&gt;</code> inline
+        <br>• outputs header tags as raw HTML
+        <br>• replaces images with <code>[filename]</code> lines
+        <br>• generates a separate image filename list
+      </p>
+
+      <div class="card" style="margin-top:1rem;">
+        <h3>1. Select HTML File</h3>
+        <input id="html-file-input" type="file" accept=".html,.htm,text/html" />
+        <div class="controls-row">
+          <label for="html-output-basename">Output base name:</label>
+          <input
+            id="html-output-basename"
+            type="text"
+            placeholder="optional, defaults to input name"
+            style="width:220px"
+          />
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>2. Extract & Download</h3>
+        <button id="process-html-btn" class="primary" disabled>Extract Text</button>
+        <button id="clear-html-btn" class="secondary">Clear</button>
+
+        <p class="summary" id="html-summary"></p>
+        <div id="html-downloads"></div>
+      </div>
+
+      <div class="card">
+        <h3>Logs</h3>
+        <div class="log" id="html-log"></div>
+      </div>
     </div>
-
-    <div class="file-list" id="file-list"></div>
-  </div>
-
-  <div class="card">
-    <h2>2. Process & Download</h2>
-    <button id="process-btn" class="primary" disabled>Process Images</button>
-    <button id="zip-btn" class="secondary" disabled>Download All as ZIP</button>
-    <button id="clear-btn" class="secondary">Clear</button>
-    <p class="summary" id="summary"></p>
-    <div id="downloads"></div>
-  </div>
-
-  <div class="card">
-    <h2>Logs</h2>
-    <div class="log" id="log"></div>
-  </div>
+  </section>
 
   <script>
-    // --- DOM references ------------------------------------------------------
+    // ========================= TABS ===============================
+    const tabButtons = document.querySelectorAll(".tab-btn");
+    const toolSections = {
+      images: document.getElementById("tool-images"),
+      html: document.getElementById("tool-html"),
+    };
 
-    const fileInput           = document.getElementById("file-input");
-    const maxWidthInput       = document.getElementById("max-width-input");
-    const maxHeightInput      = document.getElementById("max-height-input");
-    const targetPercentInput  = document.getElementById("target-percent-input");
-    const processBtn          = document.getElementById("process-btn");
-    const clearBtn            = document.getElementById("clear-btn");
-    const zipBtn              = document.getElementById("zip-btn");
-    const logEl               = document.getElementById("log");
-    const fileListEl          = document.getElementById("file-list");
-    const downloadsEl         = document.getElementById("downloads");
-    const summaryEl           = document.getElementById("summary");
+    tabButtons.forEach(btn => {
+      btn.addEventListener("click", () => {
+        const tool = btn.dataset.tool;
+        tabButtons.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        Object.entries(toolSections).forEach(([key, section]) => {
+          section.classList.toggle("active", key === tool);
+        });
+      });
+    });
 
-    let selectedFiles = [];
-    let processedResults = [];
+    // ========================= IMAGE COMPRESSION TOOL =======================
 
-    // --- Logging & utility helpers ------------------------------------------
+    const imgFileInput      = document.getElementById("img-file-input");
+    const maxWidthInput     = document.getElementById("max-width-input");
+    const maxHeightInput    = document.getElementById("max-height-input");
+    const targetPercentInput= document.getElementById("target-percent-input");
+    const processImagesBtn  = document.getElementById("process-images-btn");
+    const clearImagesBtn    = document.getElementById("clear-images-btn");
+    const zipImagesBtn      = document.getElementById("zip-images-btn");
+    const imgLogEl          = document.getElementById("img-log");
+    const imgFileListEl     = document.getElementById("img-file-list");
+    const imgDownloadsEl    = document.getElementById("img-downloads");
+    const imgSummaryEl      = document.getElementById("img-summary");
 
-    function log(message) {
-      logEl.textContent += message + "\n";
-      logEl.scrollTop = logEl.scrollHeight;
+    let selectedImgFiles = [];
+    let processedImgResults = [];
+
+    function imgLog(message) {
+      imgLogEl.textContent += message + "\n";
+      imgLogEl.scrollTop = imgLogEl.scrollHeight;
     }
 
     function bytesToKB(bytes) {
@@ -219,7 +346,6 @@
       return name.replace(/\.[^.]+$/, "") + ".jpg";
     }
 
-    // Natural sort key (like Python's natural_sort_key)
     function naturalSortKey(str) {
       return str.split(/(\d+)/).map(part => {
         const n = parseInt(part, 10);
@@ -240,15 +366,15 @@
       return 0;
     }
 
-    function updateFileList() {
-      fileListEl.innerHTML = "";
-      if (selectedFiles.length === 0) {
-        fileListEl.textContent = "No files selected.";
-        processBtn.disabled = true;
+    function updateImgFileList() {
+      imgFileListEl.innerHTML = "";
+      if (selectedImgFiles.length === 0) {
+        imgFileListEl.textContent = "No files selected.";
+        processImagesBtn.disabled = true;
         return;
       }
-      const listFrag = document.createDocumentFragment();
-      selectedFiles.forEach(file => {
+      const frag = document.createDocumentFragment();
+      selectedImgFiles.forEach(file => {
         const div = document.createElement("div");
         div.className = "file-item";
         const nameSpan = document.createElement("span");
@@ -257,25 +383,47 @@
         sizeSpan.textContent = bytesToKB(file.size);
         div.appendChild(nameSpan);
         div.appendChild(sizeSpan);
-        listFrag.appendChild(div);
+        frag.appendChild(div);
       });
-      fileListEl.appendChild(listFrag);
-      processBtn.disabled = false;
+      imgFileListEl.appendChild(frag);
+      processImagesBtn.disabled = false;
     }
 
-    function clearAll() {
-      selectedFiles = [];
-      processedResults = [];
-      fileInput.value = "";
-      fileListEl.textContent = "No files selected.";
-      downloadsEl.innerHTML = "";
-      summaryEl.textContent = "";
-      processBtn.disabled = true;
-      zipBtn.disabled = true;
-      logEl.textContent = "";
+    function clearImageTool() {
+      selectedImgFiles = [];
+      processedImgResults = [];
+      imgFileInput.value = "";
+      imgFileListEl.textContent = "No files selected.";
+      imgDownloadsEl.innerHTML = "";
+      imgSummaryEl.textContent = "";
+      processImagesBtn.disabled = true;
+      zipImagesBtn.disabled = false; // will disable again later based on results
+      zipImagesBtn.disabled = true;
+      imgLogEl.textContent = "";
     }
 
-    // --- Input validation ----------------------------------------------------
+    function loadImageFromFile(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = err => reject(err);
+          img.src = e.target.result;
+        };
+        reader.onerror = err => reject(err);
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function canvasToBlob(canvas, type = "image/jpeg", quality = 0.85) {
+      return new Promise((resolve, reject) => {
+        canvas.toBlob(blob => {
+          if (!blob) reject(new Error("Canvas is empty"));
+          else resolve(blob);
+        }, type, quality);
+      });
+    }
 
     function getValidatedMaxWidth() {
       const val = parseInt(maxWidthInput.value, 10);
@@ -310,34 +458,6 @@
       return val;
     }
 
-    // --- File handling -------------------------------------------------------
-
-    // Read file as Image
-    function loadImageFromFile(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = e => {
-          const img = new Image();
-          img.onload = () => resolve(img);
-          img.onerror = err => reject(err);
-          img.src = e.target.result;
-        };
-        reader.onerror = err => reject(err);
-        reader.readAsDataURL(file);
-      });
-    }
-
-    // Convert canvas to Blob as Promise
-    function canvasToBlob(canvas, type = "image/jpeg", quality = 0.85) {
-      return new Promise((resolve, reject) => {
-        canvas.toBlob(blob => {
-          if (!blob) reject(new Error("Canvas is empty"));
-          else resolve(blob);
-        }, type, quality);
-      });
-    }
-
-    // Resize according to max width/height, keeping aspect ratio
     async function resizeImageBrowser(img, maxWidth, maxHeight) {
       let { width, height } = img;
       let newWidth = width;
@@ -358,24 +478,20 @@
       canvas.height = newHeight;
       const ctx = canvas.getContext("2d");
 
-      // Flatten transparency to white (equivalent to RGBA -> RGB)
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, newWidth, newHeight);
       ctx.drawImage(img, 0, 0, newWidth, newHeight);
 
-      // Save as JPEG with quality 85
       const resizedBlob = await canvasToBlob(canvas, "image/jpeg", 0.85);
-
       return { canvas, resizedBlob, resized, width, height, newWidth, newHeight };
     }
 
-    // Compression loop (target = targetPercent% of resized size)
     async function compressImageFromCanvas(canvas, resizedBlob, targetPercent) {
       const originalSize = resizedBlob.size;
       const targetRatio = targetPercent / 100;
       const targetSize = originalSize * targetRatio;
-      let quality = 0.8; // start at 80
-      let compressedBlob = resizedBlob; // fallback
+      let quality = 0.8;
+      let compressedBlob = resizedBlob;
       while (true) {
         const blob = await canvasToBlob(canvas, "image/jpeg", quality);
         const size = blob.size;
@@ -384,77 +500,69 @@
           compressedBlob = blob;
           break;
         }
-        quality -= 0.05; // decrease by 5
+        quality -= 0.05;
       }
       return compressedBlob;
     }
 
-    // --- Event handlers ------------------------------------------------------
-
-    fileInput.addEventListener("change", () => {
-      const files = Array.from(fileInput.files || []);
-      const filtered = files.filter(f =>
-        /\.(png|jpe?g)$/i.test(f.name)
-      );
+    imgFileInput.addEventListener("change", () => {
+      const files = Array.from(imgFileInput.files || []);
+      const filtered = files.filter(f => /\.(png|jpe?g)$/i.test(f.name));
       filtered.sort((a, b) => naturalCompare(a.name, b.name));
-      selectedFiles = filtered;
-      processedResults = [];
-      downloadsEl.innerHTML = "";
-      summaryEl.textContent = "";
-      zipBtn.disabled = true;
-      logEl.textContent = "";
-
+      selectedImgFiles = filtered;
+      processedImgResults = [];
+      imgDownloadsEl.innerHTML = "";
+      imgSummaryEl.textContent = "";
+      zipImagesBtn.disabled = true;
+      imgLogEl.textContent = "";
       if (files.length !== filtered.length) {
-        log("Some files were ignored (unsupported extension).");
+        imgLog("Some files were ignored (unsupported extension).");
       }
       if (filtered.length === 0) {
-        fileListEl.textContent = "No valid image files selected.";
-        processBtn.disabled = true;
+        imgFileListEl.textContent = "No valid image files selected.";
+        processImagesBtn.disabled = true;
       } else {
-        updateFileList();
-        log(`Selected ${filtered.length} image(s).`);
+        updateImgFileList();
+        imgLog(`Selected ${filtered.length} image(s).`);
       }
     });
 
-    clearBtn.addEventListener("click", () => {
-      clearAll();
-    });
+    clearImagesBtn.addEventListener("click", clearImageTool);
 
-    processBtn.addEventListener("click", async () => {
-      if (selectedFiles.length === 0) return;
+    processImagesBtn.addEventListener("click", async () => {
+      if (selectedImgFiles.length === 0) return;
 
-      // Validate parameters
       let maxWidth, maxHeight, targetPercent;
       try {
         maxWidth = getValidatedMaxWidth();
         maxHeight = getValidatedMaxHeight();
         targetPercent = getValidatedTargetPercent();
       } catch (err) {
-        log("Parameter error: " + err.message);
+        imgLog("Parameter error: " + err.message);
         alert(err.message);
         return;
       }
 
-      log(
+      imgLog(
         `Using max width: ${maxWidth}px, max height: ${maxHeight}px, ` +
         `target size: ${targetPercent}% of resized file size.`
       );
 
-      processBtn.disabled = true;
-      clearBtn.disabled = true;
-      zipBtn.disabled = true;
-      downloadsEl.innerHTML = "";
-      processedResults = [];
-      summaryEl.textContent = "";
-      log(`Starting processing of ${selectedFiles.length} image(s)...`);
+      processImagesBtn.disabled = true;
+      clearImagesBtn.disabled = true;
+      zipImagesBtn.disabled = true;
+      imgDownloadsEl.innerHTML = "";
+      processedImgResults = [];
+      imgSummaryEl.textContent = "";
+      imgLog(`Starting processing of ${selectedImgFiles.length} image(s)...`);
 
       let totalOriginal = 0;
       let totalCompressed = 0;
 
-      for (let i = 0; i < selectedFiles.length; i++) {
-        const file = selectedFiles[i];
+      for (let i = 0; i < selectedImgFiles.length; i++) {
+        const file = selectedImgFiles[i];
         const index = i + 1;
-        log(`\n[${index}/${selectedFiles.length}] Processing "${file.name}"`);
+        imgLog(`\n[${index}/${selectedImgFiles.length}] Processing "${file.name}"`);
 
         totalOriginal += file.size;
 
@@ -472,22 +580,21 @@
 
           const resizedKB = bytesToKB(resizedBlob.size);
           if (resized) {
-            log(`Resized from ${width}x${height} to ${newWidth}x${newHeight}, size ~ ${resizedKB}`);
+            imgLog(`Resized from ${width}x${height} to ${newWidth}x${newHeight}, size ~ ${resizedKB}`);
           } else {
-            log(`No resize needed (${width}x${height}), saved as JPEG ~ ${resizedKB}`);
+            imgLog(`No resize needed (${width}x${height}), saved as JPEG ~ ${resizedKB}`);
           }
 
           const compressedBlob = await compressImageFromCanvas(canvas, resizedBlob, targetPercent);
           const compressedKB = bytesToKB(compressedBlob.size);
           totalCompressed += compressedBlob.size;
 
-          log(`Compressed to ~ ${compressedKB} (target <= ${targetPercent}% of resized size)`);
+          imgLog(`Compressed to ~ ${compressedKB} (target <= ${targetPercent}% of resized size)`);
 
           const outputName = replaceExtensionToJpg(file.name);
           const url = URL.createObjectURL(compressedBlob);
 
-          // Remember for summary & ZIP
-          processedResults.push({
+          processedImgResults.push({
             name: outputName,
             originalSize: file.size,
             resizedSize: resizedBlob.size,
@@ -496,7 +603,6 @@
             url
           });
 
-          // Add a download link row
           const row = document.createElement("div");
           row.className = "file-item";
 
@@ -517,10 +623,10 @@
 
           row.appendChild(left);
           row.appendChild(right);
-          downloadsEl.appendChild(row);
+          imgDownloadsEl.appendChild(row);
 
         } catch (err) {
-          log(`Error processing "${file.name}": ${err.message || err}`);
+          imgLog(`Error processing "${file.name}": ${err.message || err}`);
         }
       }
 
@@ -529,29 +635,29 @@
           ? ((1 - totalCompressed / totalOriginal) * 100).toFixed(1)
           : 0;
 
-      summaryEl.textContent =
+      imgSummaryEl.textContent =
         `Done. Total original: ${bytesToKB(totalOriginal)} → ` +
         `${bytesToKB(totalCompressed)} (saved ~${savingPercent}%).`;
 
-      log("\nAll images processed.");
-      processBtn.disabled = false;
-      clearBtn.disabled = false;
+      imgLog("\nAll images processed.");
+      processImagesBtn.disabled = false;
+      clearImagesBtn.disabled = false;
 
-      if (processedResults.length > 0) {
-        zipBtn.disabled = false;
+      if (processedImgResults.length > 0) {
+        zipImagesBtn.disabled = false;
       }
     });
 
-    zipBtn.addEventListener("click", async () => {
-      if (processedResults.length === 0) return;
+    zipImagesBtn.addEventListener("click", async () => {
+      if (processedImgResults.length === 0) return;
 
-      zipBtn.disabled = true;
-      const originalLabel = zipBtn.textContent;
-      zipBtn.textContent = "Preparing ZIP...";
+      zipImagesBtn.disabled = true;
+      const originalLabel = zipImagesBtn.textContent;
+      zipImagesBtn.textContent = "Preparing ZIP...";
 
       try {
         const zip = new JSZip();
-        processedResults.forEach(result => {
+        processedImgResults.forEach(result => {
           zip.file(result.name, result.blob);
         });
 
@@ -567,11 +673,208 @@
 
         setTimeout(() => URL.revokeObjectURL(url), 10000);
       } catch (err) {
-        log(`Error creating ZIP: ${err.message || err}`);
+        imgLog(`Error creating ZIP: ${err.message || err}`);
       } finally {
-        zipBtn.textContent = originalLabel;
-        zipBtn.disabled = false;
+        zipImagesBtn.textContent = originalLabel;
+        zipImagesBtn.disabled = false;
       }
+    });
+
+    // ========================= HTML TEXT EXTRACTOR TOOL =====================
+
+    const htmlFileInput       = document.getElementById("html-file-input");
+    const htmlOutputBasename  = document.getElementById("html-output-basename");
+    const processHtmlBtn      = document.getElementById("process-html-btn");
+    const clearHtmlBtn        = document.getElementById("clear-html-btn");
+    const htmlLogEl           = document.getElementById("html-log");
+    const htmlDownloadsEl     = document.getElementById("html-downloads");
+    const htmlSummaryEl       = document.getElementById("html-summary");
+
+    let selectedHtmlFile = null;
+
+    function htmlLog(message) {
+      htmlLogEl.textContent += message + "\n";
+      htmlLogEl.scrollTop = htmlLogEl.scrollHeight;
+    }
+
+    htmlFileInput.addEventListener("change", () => {
+      const file = htmlFileInput.files && htmlFileInput.files[0];
+      selectedHtmlFile = file || null;
+      htmlDownloadsEl.innerHTML = "";
+      htmlSummaryEl.textContent = "";
+      htmlLogEl.textContent = "";
+
+      if (!file) {
+        processHtmlBtn.disabled = true;
+        htmlLog("No HTML file selected.");
+        return;
+      }
+
+      processHtmlBtn.disabled = false;
+      htmlLog(`Selected HTML file: ${file.name}`);
+      if (!htmlOutputBasename.value.trim()) {
+        const base = file.name.replace(/\.[^.]+$/, "");
+        htmlOutputBasename.value = base;
+      }
+    });
+
+    clearHtmlBtn.addEventListener("click", () => {
+      selectedHtmlFile = null;
+      htmlFileInput.value = "";
+      htmlOutputBasename.value = "";
+      htmlDownloadsEl.innerHTML = "";
+      htmlSummaryEl.textContent = "";
+      htmlLogEl.textContent = "";
+      processHtmlBtn.disabled = true;
+    });
+
+    function getBasename() {
+      const v = htmlOutputBasename.value.trim();
+      if (v) return v;
+      if (selectedHtmlFile) {
+        return selectedHtmlFile.name.replace(/\.[^.]+$/, "");
+      }
+      return "output";
+    }
+
+    function cleanPreservingBIU(html) {
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = html;
+
+      function unwrapOthers(node) {
+        const children = Array.from(node.childNodes);
+        for (const child of children) {
+          if (child.nodeType === Node.ELEMENT_NODE) {
+            if (!["B", "I", "U"].includes(child.tagName)) {
+              // unwrap
+              unwrapOthers(child);
+              while (child.firstChild) {
+                node.insertBefore(child.firstChild, child);
+              }
+              node.removeChild(child);
+            } else {
+              // keep b/i/u but descend
+              unwrapOthers(child);
+            }
+          }
+        }
+      }
+
+      unwrapOthers(wrapper);
+      return wrapper.innerHTML.trim();
+    }
+
+    processHtmlBtn.addEventListener("click", () => {
+      if (!selectedHtmlFile) return;
+
+      processHtmlBtn.disabled = true;
+      clearHtmlBtn.disabled = true;
+      htmlDownloadsEl.innerHTML = "";
+      htmlSummaryEl.textContent = "";
+      htmlLogEl.textContent = "";
+
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const text = e.target.result;
+          htmlLog("HTML file loaded. Parsing...");
+
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(text, "text/html");
+
+          const selector = "h1,h2,h3,h4,h5,h6,p,footer,sup,small,b,i,u,img";
+          const elements = Array.from(doc.querySelectorAll(selector));
+
+          let mainLines = [];
+          let imageFilenames = [];
+
+          elements.forEach(el => {
+            const tag = el.tagName.toLowerCase();
+
+            if (tag === "img") {
+              const src = el.getAttribute("src");
+              if (src) {
+                const parts = src.split(/[\\/]/);
+                const filename = parts[parts.length - 1];
+                imageFilenames.push(filename);
+                mainLines.push(`[${filename}]`);
+              }
+            } else if (["h1","h2","h3","h4","h5","h6"].includes(tag)) {
+              mainLines.push(el.outerHTML);
+            } else {
+              const innerHtml = el.innerHTML;
+              if (!innerHtml || !innerHtml.trim()) return;
+              const cleaned = cleanPreservingBIU(innerHtml);
+              if (cleaned) {
+                mainLines.push(cleaned);
+              }
+            }
+          });
+
+          const mainText = mainLines.join("\n");
+          const imagesText = imageFilenames.join("\n");
+
+          const base = getBasename();
+          const mainBlob = new Blob([mainText], { type: "text/plain;charset=utf-8" });
+          const imgBlob  = new Blob([imagesText], { type: "text/plain;charset=utf-8" });
+
+          const mainUrl = URL.createObjectURL(mainBlob);
+          const imgUrl  = URL.createObjectURL(imgBlob);
+
+          htmlDownloadsEl.innerHTML = "";
+
+          const mainRow = document.createElement("div");
+          mainRow.className = "file-item";
+          const mainLeft = document.createElement("div");
+          mainLeft.textContent = `${base}.txt`;
+          const mainRight = document.createElement("div");
+          const mainA = document.createElement("a");
+          mainA.href = mainUrl;
+          mainA.download = `${base}.txt`;
+          mainA.className = "download-link";
+          mainA.textContent = "Download extracted text";
+          mainRight.appendChild(mainA);
+          mainRow.appendChild(mainLeft);
+          mainRow.appendChild(mainRight);
+
+          const imgRow = document.createElement("div");
+          imgRow.className = "file-item";
+          const imgLeft = document.createElement("div");
+          imgLeft.textContent = `${base}_image_files.txt`;
+          const imgRight = document.createElement("div");
+          const imgA = document.createElement("a");
+          imgA.href = imgUrl;
+          imgA.download = `${base}_image_files.txt`;
+          imgA.className = "download-link";
+          imgA.textContent = "Download image filename list";
+          imgRight.appendChild(imgA);
+          imgRow.appendChild(imgLeft);
+          imgRow.appendChild(imgRight);
+
+          htmlDownloadsEl.appendChild(mainRow);
+          htmlDownloadsEl.appendChild(imgRow);
+
+          htmlSummaryEl.textContent =
+            `Extracted ${mainLines.length} lines of content and ${imageFilenames.length} image filename(s).`;
+
+          htmlLog("Extraction completed.");
+
+          clearHtmlBtn.disabled = false;
+          processHtmlBtn.disabled = false;
+        } catch (err) {
+          htmlLog("Error processing HTML: " + (err.message || err));
+          alert("Error: " + (err.message || err));
+          clearHtmlBtn.disabled = false;
+          processHtmlBtn.disabled = false;
+        }
+      };
+      reader.onerror = err => {
+        htmlLog("Error reading HTML file: " + (err.message || err));
+        alert("Error reading file.");
+        clearHtmlBtn.disabled = false;
+        processHtmlBtn.disabled = false;
+      };
+      reader.readAsText(selectedHtmlFile, "utf-8");
     });
   </script>
 </body>
