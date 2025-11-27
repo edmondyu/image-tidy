@@ -162,6 +162,15 @@
       color: #374151;
     }
 
+    .tag-checkboxes label {
+      font-size: 0.85rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      margin-right: 0.75rem;
+      margin-bottom: 0.25rem;
+    }
+
     @media (max-width: 640px) {
       body {
         padding: 1rem;
@@ -261,24 +270,36 @@
       <p>
         Browser-based port of your BeautifulSoup script:
         <br>• walks through <code>h1–h6, p, footer, sup, small, b, i, u, img</code> in document order
-        <br>• preserves <code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;u&gt;</code> inline
+        <br>• preserves only the tags you select below; all others are stripped but their text remains
         <br>• outputs header tags as raw HTML
         <br>• replaces images with <code>[filename]</code> lines
-        <br>• generates a separate image filename list
+        <br>• generates a separate image filename list per input file
       </p>
 
       <div class="card" style="margin-top:1rem;">
-        <h3>1. Select HTML File</h3>
-        <input id="html-file-input" type="file" accept=".html,.htm,text/html" />
+        <h3>1. Select HTML Files & Tags to Preserve</h3>
+        <p>You can select one or more HTML files:</p>
+        <input id="html-file-input" type="file" multiple accept=".html,.htm,text/html" />
+
         <div class="controls-row">
-          <label for="html-output-basename">Output base name:</label>
-          <input
-            id="html-output-basename"
-            type="text"
-            placeholder="optional, defaults to input name"
-            style="width:220px"
-          />
+          <span style="font-size:0.9rem;">Preserve tags (inline):</span>
         </div>
+        <div class="controls-row tag-checkboxes">
+          <label><input type="checkbox" class="tag-preserve-checkbox" value="b" checked> &lt;b&gt;</label>
+          <label><input type="checkbox" class="tag-preserve-checkbox" value="i" checked> &lt;i&gt;</label>
+          <label><input type="checkbox" class="tag-preserve-checkbox" value="u" checked> &lt;u&gt;</label>
+          <label><input type="checkbox" class="tag-preserve-checkbox" value="strong"> &lt;strong&gt;</label>
+          <label><input type="checkbox" class="tag-preserve-checkbox" value="em"> &lt;em&gt;</label>
+          <label><input type="checkbox" class="tag-preserve-checkbox" value="sup"> &lt;sup&gt;</label>
+          <label><input type="checkbox" class="tag-preserve-checkbox" value="sub"> &lt;sub&gt;</label>
+          <label><input type="checkbox" class="tag-preserve-checkbox" value="small"> &lt;small&gt;</label>
+          <label><input type="checkbox" class="tag-preserve-checkbox" value="a"> &lt;a&gt;</label>
+          <label><input type="checkbox" class="tag-preserve-checkbox" value="code"> &lt;code&gt;</label>
+          <label><input type="checkbox" class="tag-preserve-checkbox" value="span"> &lt;span&gt;</label>
+        </div>
+        <p class="hint">
+          Only checked tags will be preserved as HTML in the output. All other tags are removed but their text is kept.
+        </p>
       </div>
 
       <div class="card">
@@ -397,7 +418,6 @@
       imgDownloadsEl.innerHTML = "";
       imgSummaryEl.textContent = "";
       processImagesBtn.disabled = true;
-      zipImagesBtn.disabled = false; // will disable again later based on results
       zipImagesBtn.disabled = true;
       imgLogEl.textContent = "";
     }
@@ -683,14 +703,14 @@
     // ========================= HTML TEXT EXTRACTOR TOOL =====================
 
     const htmlFileInput       = document.getElementById("html-file-input");
-    const htmlOutputBasename  = document.getElementById("html-output-basename");
     const processHtmlBtn      = document.getElementById("process-html-btn");
     const clearHtmlBtn        = document.getElementById("clear-html-btn");
     const htmlLogEl           = document.getElementById("html-log");
     const htmlDownloadsEl     = document.getElementById("html-downloads");
     const htmlSummaryEl       = document.getElementById("html-summary");
+    const tagCheckboxes       = document.querySelectorAll(".tag-preserve-checkbox");
 
-    let selectedHtmlFile = null;
+    let selectedHtmlFiles = [];
 
     function htmlLog(message) {
       htmlLogEl.textContent += message + "\n";
@@ -698,46 +718,43 @@
     }
 
     htmlFileInput.addEventListener("change", () => {
-      const file = htmlFileInput.files && htmlFileInput.files[0];
-      selectedHtmlFile = file || null;
+      const files = Array.from(htmlFileInput.files || []);
+      selectedHtmlFiles = files;
       htmlDownloadsEl.innerHTML = "";
       htmlSummaryEl.textContent = "";
       htmlLogEl.textContent = "";
 
-      if (!file) {
+      if (files.length === 0) {
         processHtmlBtn.disabled = true;
-        htmlLog("No HTML file selected.");
+        htmlLog("No HTML files selected.");
         return;
       }
 
       processHtmlBtn.disabled = false;
-      htmlLog(`Selected HTML file: ${file.name}`);
-      if (!htmlOutputBasename.value.trim()) {
-        const base = file.name.replace(/\.[^.]+$/, "");
-        htmlOutputBasename.value = base;
-      }
+      htmlLog(`Selected ${files.length} HTML file(s):`);
+      files.forEach(f => htmlLog(" • " + f.name));
     });
 
     clearHtmlBtn.addEventListener("click", () => {
-      selectedHtmlFile = null;
+      selectedHtmlFiles = [];
       htmlFileInput.value = "";
-      htmlOutputBasename.value = "";
       htmlDownloadsEl.innerHTML = "";
       htmlSummaryEl.textContent = "";
       htmlLogEl.textContent = "";
       processHtmlBtn.disabled = true;
     });
 
-    function getBasename() {
-      const v = htmlOutputBasename.value.trim();
-      if (v) return v;
-      if (selectedHtmlFile) {
-        return selectedHtmlFile.name.replace(/\.[^.]+$/, "");
-      }
-      return "output";
+    function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = err => reject(err);
+        reader.readAsText(file, "utf-8");
+      });
     }
 
-    function cleanPreservingBIU(html) {
+    // Remove all tags except those in preserveSet; keep text
+    function cleanPreservingSelected(html, preserveSet) {
       const wrapper = document.createElement("div");
       wrapper.innerHTML = html;
 
@@ -745,15 +762,16 @@
         const children = Array.from(node.childNodes);
         for (const child of children) {
           if (child.nodeType === Node.ELEMENT_NODE) {
-            if (!["B", "I", "U"].includes(child.tagName)) {
-              // unwrap
+            const tag = child.tagName.toLowerCase();
+            if (!preserveSet.has(tag)) {
+              // unwrap this tag but keep its children
               unwrapOthers(child);
               while (child.firstChild) {
                 node.insertBefore(child.firstChild, child);
               }
               node.removeChild(child);
             } else {
-              // keep b/i/u but descend
+              // preserve this tag and recurse into it
               unwrapOthers(child);
             }
           }
@@ -764,8 +782,8 @@
       return wrapper.innerHTML.trim();
     }
 
-    processHtmlBtn.addEventListener("click", () => {
-      if (!selectedHtmlFile) return;
+    processHtmlBtn.addEventListener("click", async () => {
+      if (selectedHtmlFiles.length === 0) return;
 
       processHtmlBtn.disabled = true;
       clearHtmlBtn.disabled = true;
@@ -773,11 +791,27 @@
       htmlSummaryEl.textContent = "";
       htmlLogEl.textContent = "";
 
-      const reader = new FileReader();
-      reader.onload = e => {
-        try {
-          const text = e.target.result;
-          htmlLog("HTML file loaded. Parsing...");
+      // Build set of tags to preserve from checkboxes
+      const preserveSet = new Set(
+        Array.from(tagCheckboxes)
+          .filter(cb => cb.checked)
+          .map(cb => cb.value.toLowerCase())
+      );
+
+      if (preserveSet.size === 0) {
+        htmlLog("Warning: no tags selected to preserve – output will be plain text only.");
+      } else {
+        htmlLog("Preserving tags: " + Array.from(preserveSet).map(t => "<" + t + ">").join(", "));
+      }
+
+      let totalFiles = 0;
+      let totalLines = 0;
+      let totalImages = 0;
+
+      try {
+        for (const file of selectedHtmlFiles) {
+          htmlLog(`\nProcessing file: ${file.name}`);
+          const text = await readFileAsText(file);
 
           const parser = new DOMParser();
           const doc = parser.parseFromString(text, "text/html");
@@ -804,33 +838,42 @@
             } else {
               const innerHtml = el.innerHTML;
               if (!innerHtml || !innerHtml.trim()) return;
-              const cleaned = cleanPreservingBIU(innerHtml);
-              if (cleaned) {
-                mainLines.push(cleaned);
+              const cleanedInner = cleanPreservingSelected(innerHtml, preserveSet);
+              if (!cleanedInner) return;
+
+              // If the outer element itself is in the preserve set, keep it too
+              let line;
+              if (preserveSet.has(tag)) {
+                line = `<${tag}>${cleanedInner}</${tag}>`;
+              } else {
+                line = cleanedInner;
               }
+              mainLines.push(line);
             }
           });
 
           const mainText = mainLines.join("\n");
           const imagesText = imageFilenames.join("\n");
 
-          const base = getBasename();
+          totalFiles += 1;
+          totalLines += mainLines.length;
+          totalImages += imageFilenames.length;
+
+          const baseName = file.name.replace(/\.[^.]+$/, "");
           const mainBlob = new Blob([mainText], { type: "text/plain;charset=utf-8" });
           const imgBlob  = new Blob([imagesText], { type: "text/plain;charset=utf-8" });
 
           const mainUrl = URL.createObjectURL(mainBlob);
           const imgUrl  = URL.createObjectURL(imgBlob);
 
-          htmlDownloadsEl.innerHTML = "";
-
           const mainRow = document.createElement("div");
           mainRow.className = "file-item";
           const mainLeft = document.createElement("div");
-          mainLeft.textContent = `${base}.txt`;
+          mainLeft.textContent = `${baseName}.txt`;
           const mainRight = document.createElement("div");
           const mainA = document.createElement("a");
           mainA.href = mainUrl;
-          mainA.download = `${base}.txt`;
+          mainA.download = `${baseName}.txt`;
           mainA.className = "download-link";
           mainA.textContent = "Download extracted text";
           mainRight.appendChild(mainA);
@@ -840,11 +883,11 @@
           const imgRow = document.createElement("div");
           imgRow.className = "file-item";
           const imgLeft = document.createElement("div");
-          imgLeft.textContent = `${base}_image_files.txt`;
+          imgLeft.textContent = `${baseName}_image_files.txt`;
           const imgRight = document.createElement("div");
           const imgA = document.createElement("a");
           imgA.href = imgUrl;
-          imgA.download = `${base}_image_files.txt`;
+          imgA.download = `${baseName}_image_files.txt`;
           imgA.className = "download-link";
           imgA.textContent = "Download image filename list";
           imgRight.appendChild(imgA);
@@ -854,27 +897,24 @@
           htmlDownloadsEl.appendChild(mainRow);
           htmlDownloadsEl.appendChild(imgRow);
 
-          htmlSummaryEl.textContent =
-            `Extracted ${mainLines.length} lines of content and ${imageFilenames.length} image filename(s).`;
-
-          htmlLog("Extraction completed.");
-
-          clearHtmlBtn.disabled = false;
-          processHtmlBtn.disabled = false;
-        } catch (err) {
-          htmlLog("Error processing HTML: " + (err.message || err));
-          alert("Error: " + (err.message || err));
-          clearHtmlBtn.disabled = false;
-          processHtmlBtn.disabled = false;
+          htmlLog(
+            `Finished "${file.name}" – ` +
+            `${mainLines.length} content line(s), ${imageFilenames.length} image filename(s).`
+          );
         }
-      };
-      reader.onerror = err => {
-        htmlLog("Error reading HTML file: " + (err.message || err));
-        alert("Error reading file.");
+
+        htmlSummaryEl.textContent =
+          `Processed ${totalFiles} file(s). ` +
+          `Total ${totalLines} content line(s) and ${totalImages} image filename(s).`;
+
+        htmlLog("\nAll HTML files processed.");
+      } catch (err) {
+        htmlLog("Error processing HTML: " + (err.message || err));
+        alert("Error: " + (err.message || err));
+      } finally {
         clearHtmlBtn.disabled = false;
         processHtmlBtn.disabled = false;
-      };
-      reader.readAsText(selectedHtmlFile, "utf-8");
+      }
     });
   </script>
 </body>
