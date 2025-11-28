@@ -72,6 +72,10 @@
       font-size: 0.85rem;
       color: #6b7280;
     }
+    .file-list {
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+    }
     .file-item {
       display: flex;
       justify-content: space-between;
@@ -112,6 +116,8 @@
       color: #2563eb;
     }
   </style>
+  <!-- JSZip for ZIP creation -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
 <body>
   <a class="back" href="index.html">← Back to Toolbox</a>
@@ -129,6 +135,9 @@
       multiple
       accept=".html,.htm,.xhtml,text/html,application/xhtml+xml"
     />
+
+    <!-- NEW: show selected source files -->
+    <div id="html-file-list" class="file-list"></div>
 
     <div class="controls-row">
       <span style="font-size:0.9rem;">Preserve tags (inline):</span>
@@ -154,6 +163,7 @@
   <div class="card">
     <h2>2. Extract & Download</h2>
     <button id="process-html-btn" class="primary" disabled>Extract Text</button>
+    <button id="html-zip-btn" class="secondary" disabled>Download all as ZIP</button>
     <button id="clear-html-btn" class="secondary">Clear</button>
 
     <p class="summary" id="html-summary"></p>
@@ -169,16 +179,45 @@
     const htmlFileInput       = document.getElementById("html-file-input");
     const processHtmlBtn      = document.getElementById("process-html-btn");
     const clearHtmlBtn        = document.getElementById("clear-html-btn");
+    const htmlZipBtn          = document.getElementById("html-zip-btn");
     const htmlLogEl           = document.getElementById("html-log");
     const htmlDownloadsEl     = document.getElementById("html-downloads");
     const htmlSummaryEl       = document.getElementById("html-summary");
     const tagCheckboxes       = document.querySelectorAll(".tag-preserve-checkbox");
+    const htmlFileListEl      = document.getElementById("html-file-list");
 
     let selectedHtmlFiles = [];
+    // store all generated outputs for ZIP: {name, blob}
+    let generatedOutputs = [];
 
     function htmlLog(message) {
       htmlLogEl.textContent += message + "\n";
       htmlLogEl.scrollTop = htmlLogEl.scrollHeight;
+    }
+
+    function bytesToKB(bytes) {
+      return (bytes / 1024).toFixed(2) + " KB";
+    }
+
+    function updateFileListUI() {
+      htmlFileListEl.innerHTML = "";
+      if (selectedHtmlFiles.length === 0) {
+        htmlFileListEl.textContent = "No files selected.";
+        return;
+      }
+      const frag = document.createDocumentFragment();
+      selectedHtmlFiles.forEach(file => {
+        const row = document.createElement("div");
+        row.className = "file-item";
+        const left = document.createElement("span");
+        left.textContent = file.name;
+        const right = document.createElement("span");
+        right.textContent = bytesToKB(file.size);
+        row.appendChild(left);
+        row.appendChild(right);
+        frag.appendChild(row);
+      });
+      htmlFileListEl.appendChild(frag);
     }
 
     htmlFileInput.addEventListener("change", () => {
@@ -187,7 +226,9 @@
       if (files.length === 0) {
         if (selectedHtmlFiles.length === 0) {
           processHtmlBtn.disabled = true;
+          htmlZipBtn.disabled = true;
           htmlLog("No HTML/XHTML files selected.");
+          updateFileListUI();
         }
         return;
       }
@@ -205,19 +246,26 @@
         }
       }
 
+      // allow user to re-open dialog and add more files
       htmlFileInput.value = "";
 
+      // reset outputs/logs when input changes
       htmlDownloadsEl.innerHTML = "";
       htmlSummaryEl.textContent = "";
       htmlLogEl.textContent = "";
+      generatedOutputs = [];
+      htmlZipBtn.disabled = true;
 
       if (selectedHtmlFiles.length === 0) {
         processHtmlBtn.disabled = true;
         htmlLog("No HTML/XHTML files selected.");
+        updateFileListUI();
         return;
       }
 
       processHtmlBtn.disabled = false;
+      updateFileListUI();
+
       htmlLog(`Total selected files: ${selectedHtmlFiles.length}`);
       if (addedCount > 0) {
         htmlLog(`Added ${addedCount} new file(s):`);
@@ -229,11 +277,14 @@
 
     clearHtmlBtn.addEventListener("click", () => {
       selectedHtmlFiles = [];
+      generatedOutputs = [];
       htmlFileInput.value = "";
       htmlDownloadsEl.innerHTML = "";
       htmlSummaryEl.textContent = "";
       htmlLogEl.textContent = "";
+      htmlFileListEl.textContent = "No files selected.";
       processHtmlBtn.disabled = true;
+      htmlZipBtn.disabled = true;
     });
 
     function readFileAsText(file) {
@@ -276,9 +327,11 @@
 
       processHtmlBtn.disabled = true;
       clearHtmlBtn.disabled = true;
+      htmlZipBtn.disabled = true;
       htmlDownloadsEl.innerHTML = "";
       htmlSummaryEl.textContent = "";
       htmlLogEl.textContent = "";
+      generatedOutputs = [];
 
       const preserveSet = new Set(
         Array.from(tagCheckboxes)
@@ -350,38 +403,48 @@
           const mainBlob = new Blob([mainText], { type: "text/plain;charset=utf-8" });
           const imgBlob  = new Blob([imagesText], { type: "text/plain;charset=utf-8" });
 
+          // store in memory for ZIP
+          const mainOutName = `${baseName}.txt`;
+          const imgOutName  = `${baseName}_image_files.txt`;
+          generatedOutputs.push({ name: mainOutName, blob: mainBlob });
+          if (imageFilenames.length > 0) {
+            generatedOutputs.push({ name: imgOutName, blob: imgBlob });
+          }
+
+          // also create per-file download links
           const mainUrl = URL.createObjectURL(mainBlob);
           const imgUrl  = URL.createObjectURL(imgBlob);
 
           const mainRow = document.createElement("div");
           mainRow.className = "file-item";
           const mainLeft = document.createElement("div");
-          mainLeft.textContent = `${baseName}.txt`;
+          mainLeft.textContent = mainOutName;
           const mainRight = document.createElement("div");
           const mainA = document.createElement("a");
           mainA.href = mainUrl;
-          mainA.download = `${baseName}.txt`;
+          mainA.download = mainOutName;
           mainA.className = "download-link";
           mainA.textContent = "Download extracted text";
           mainRight.appendChild(mainA);
           mainRow.appendChild(mainLeft);
           mainRow.appendChild(mainRight);
 
+          htmlDownloadsEl.appendChild(mainRow);
+
           const imgRow = document.createElement("div");
           imgRow.className = "file-item";
           const imgLeft = document.createElement("div");
-          imgLeft.textContent = `${baseName}_image_files.txt`;
+          imgLeft.textContent = imgOutName;
           const imgRight = document.createElement("div");
           const imgA = document.createElement("a");
           imgA.href = imgUrl;
-          imgA.download = `${baseName}_image_files.txt`;
+          imgA.download = imgOutName;
           imgA.className = "download-link";
           imgA.textContent = "Download image filename list";
           imgRight.appendChild(imgA);
           imgRow.appendChild(imgLeft);
           imgRow.appendChild(imgRight);
 
-          htmlDownloadsEl.appendChild(mainRow);
           htmlDownloadsEl.appendChild(imgRow);
 
           htmlLog(
@@ -395,12 +458,50 @@
           `Total ${totalLines} content line(s) and ${totalImages} image filename(s).`;
 
         htmlLog("\nAll HTML/XHTML files processed.");
+
+        if (generatedOutputs.length > 0) {
+          htmlZipBtn.disabled = false;
+        }
       } catch (err) {
         htmlLog("Error processing HTML: " + (err.message || err));
         alert("Error: " + (err.message || err));
       } finally {
         clearHtmlBtn.disabled = false;
         processHtmlBtn.disabled = false;
+      }
+    });
+
+    // ZIP all outputs
+    htmlZipBtn.addEventListener("click", async () => {
+      if (generatedOutputs.length === 0) return;
+
+      htmlZipBtn.disabled = true;
+      const originalLabel = htmlZipBtn.textContent;
+      htmlZipBtn.textContent = "Preparing ZIP...";
+
+      try {
+        const zip = new JSZip();
+        generatedOutputs.forEach(out => {
+          zip.file(out.name, out.blob);
+        });
+
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(zipBlob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "html_extracted_outputs.zip";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      } catch (err) {
+        htmlLog("Error creating ZIP: " + (err.message || err));
+        alert("Error creating ZIP: " + (err.message || err));
+      } finally {
+        htmlZipBtn.textContent = originalLabel;
+        htmlZipBtn.disabled = false;
       }
     });
   </script>
