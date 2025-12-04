@@ -334,8 +334,7 @@
       return wrapper.innerHTML;
     }
 
-    // NEW: normalize whitespace so that pretty HTML formatting
-    // doesn't create unwanted line breaks/spaces in plain text.
+    // Normalize whitespace so pretty HTML formatting doesn't create unwanted line breaks
     function normalizeHtmlTextLine(line) {
       let s = line;
 
@@ -419,7 +418,13 @@
               if (preserveSet.has(tag)) {
                 line = `<${tag}>${cleanedInner}</${tag}>`;
               } else {
-                line = cleanedInner; // downgrade to text, but still normalized
+                line = cleanedInner; // downgrade to text
+              }
+
+              // NEW: also recognise explicit [image-xxx.jpg/png] marker lines
+              const markerMatch = line.trim().match(/^\[(image-[^\]]+\.(?:jpe?g|png))\]$/i);
+              if (markerMatch) {
+                imageFilenames.push(markerMatch[1]); // e.g. "image-foo.jpg"
               }
 
               line = normalizeHtmlTextLine(line);
@@ -439,6 +444,12 @@
               line = `<${tag}>${cleanedInner}</${tag}>`;
             } else {
               line = cleanedInner;
+            }
+
+            // NEW: also recognise explicit [image-xxx.jpg/png] marker lines
+            const markerMatch = line.trim().match(/^\[(image-[^\]]+\.(?:jpe?g|png))\]$/i);
+            if (markerMatch) {
+              imageFilenames.push(markerMatch[1]);
             }
 
             line = normalizeHtmlTextLine(line);
