@@ -143,9 +143,8 @@
       <span style="font-size:0.9rem;">Preserve tags:</span>
     </div>
 
-    <!-- NEW: header tags h1–h6 added as options -->
+    <!-- Header tags -->
     <div class="controls-row tag-checkboxes">
-      <!-- Headers -->
       <label><input type="checkbox" class="tag-preserve-checkbox" value="h1" checked> &lt;h1&gt;</label>
       <label><input type="checkbox" class="tag-preserve-checkbox" value="h2" checked> &lt;h2&gt;</label>
       <label><input type="checkbox" class="tag-preserve-checkbox" value="h3" checked> &lt;h3&gt;</label>
@@ -154,8 +153,8 @@
       <label><input type="checkbox" class="tag-preserve-checkbox" value="h6" checked> &lt;h6&gt;</label>
     </div>
 
+    <!-- Inline/formatting tags -->
     <div class="controls-row tag-checkboxes">
-      <!-- Inline / formatting tags -->
       <label><input type="checkbox" class="tag-preserve-checkbox" value="b" checked> &lt;b&gt;</label>
       <label><input type="checkbox" class="tag-preserve-checkbox" value="i" checked> &lt;i&gt;</label>
       <label><input type="checkbox" class="tag-preserve-checkbox" value="u" checked> &lt;u&gt;</label>
@@ -308,6 +307,7 @@
       });
     }
 
+    // Remove non-preserved tags but keep their text and preserved tags inside
     function cleanPreservingSelected(html, preserveSet) {
       const wrapper = document.createElement("div");
       wrapper.innerHTML = html;
@@ -331,7 +331,24 @@
       }
 
       unwrapOthers(wrapper);
-      return wrapper.innerHTML.trim();
+      return wrapper.innerHTML;
+    }
+
+    // NEW: normalize whitespace so that pretty HTML formatting
+    // doesn't create unwanted line breaks/spaces in plain text.
+    function normalizeHtmlTextLine(line) {
+      let s = line;
+
+      // collapse any sequence of whitespace (spaces, newlines, tabs) into a single space
+      s = s.replace(/\s+/g, " ");
+
+      // remove spaces before punctuation (both CJK and Western)
+      s = s.replace(/\s+([。，、！!？?\.,;:])/g, "$1");
+
+      // trim leading/trailing spaces
+      s = s.trim();
+
+      return s;
     }
 
     processHtmlBtn.addEventListener("click", async () => {
@@ -378,6 +395,7 @@
           elements.forEach(el => {
             const tag = el.tagName.toLowerCase();
 
+            // Images → [filename]
             if (tag === "img") {
               const src = el.getAttribute("src");
               if (src) {
@@ -389,27 +407,32 @@
               return;
             }
 
+            // Headers h1–h6
             if (["h1","h2","h3","h4","h5","h6"].includes(tag)) {
               const innerHtml = el.innerHTML;
               if (!innerHtml || !innerHtml.trim()) return;
 
               const cleanedInner = cleanPreservingSelected(innerHtml, preserveSet);
-              if (!cleanedInner) return;
+              if (!cleanedInner.trim()) return;
 
               let line;
               if (preserveSet.has(tag)) {
                 line = `<${tag}>${cleanedInner}</${tag}>`;
               } else {
-                line = cleanedInner; // downgrade to plain text
+                line = cleanedInner; // downgrade to text, but still normalized
               }
-              mainLines.push(line);
+
+              line = normalizeHtmlTextLine(line);
+              if (line) mainLines.push(line);
               return;
             }
 
+            // Other tags (p, footer, sup, small, b, i, u, etc.)
             const innerHtml = el.innerHTML;
             if (!innerHtml || !innerHtml.trim()) return;
+
             const cleanedInner = cleanPreservingSelected(innerHtml, preserveSet);
-            if (!cleanedInner) return;
+            if (!cleanedInner.trim()) return;
 
             let line;
             if (preserveSet.has(tag)) {
@@ -417,7 +440,9 @@
             } else {
               line = cleanedInner;
             }
-            mainLines.push(line);
+
+            line = normalizeHtmlTextLine(line);
+            if (line) mainLines.push(line);
           });
 
           const mainText = mainLines.join("\n");
