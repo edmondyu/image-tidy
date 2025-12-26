@@ -535,9 +535,12 @@
 
           // If merge enabled: append converted text in order
           if (mergeOutputToggle.checked) {
-            mergedParts.push(`===== ${file.name} =====`);
-            if (mainText.trim()) mergedParts.push(mainText.trim());
+            mergedBlocks.push({
+              filename: file.name,
+              text: mainText.trim()
+            });
           }
+
 
           const baseName = file.name.replace(/\.[^.]+$/, "");
           const mainBlob = new Blob([mainText], { type: "text/plain;charset=utf-8" });
