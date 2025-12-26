@@ -75,7 +75,7 @@
   </style>
 
   <!-- PDF.js (text-based PDFs; no OCR) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.min.js"></script>
 </head>
 <body>
   <a class="back" href="index.html">← Back to Toolbox</a>
@@ -216,17 +216,17 @@
 
       try {
         // Configure worker
-        if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
+        if (pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
           // Use matching version worker from CDN
-          window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-            "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.js";
+          pdfjsLib.GlobalWorkerOptions.workerSrc =
+            "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js";
         }
 
         log("Reading PDF into memory...");
         const buf = await selectedFile.arrayBuffer();
 
         log("Loading PDF...");
-        const loadingTask = window.pdfjsLib.getDocument({ data: buf });
+        const loadingTask = pdfjsLib.getDocument({ data: buf });
         const pdf = await loadingTask.promise;
 
         log("Pages: " + pdf.numPages);
