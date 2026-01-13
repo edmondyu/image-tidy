@@ -155,18 +155,22 @@
   </div>
 
   <!-- Libraries -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 
   <script>
     // PDF.js worker setup (CDN)
     // On the CDN build, pdf.js exposes a global `pdfjsLib`.
     const pdfjsLib = window.pdfjsLib || window['pdfjs-dist/build/pdf'];
-    if (!pdfjsLib) {
-      throw new Error('pdf.js failed to load (pdfjsLib is undefined). Check your network/CSP or the CDN script tag.');
-    }
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.js';
+if (!pdfjsLib) {
+  const statusEl = document.getElementById('status');
+  if (statusEl) {
+    statusEl.textContent = 'pdf.js failed to load (pdfjsLib is undefined).
+Your browser received HTML instead of JavaScript from the CDN (often due to a block/redirect).
+Fix: allow the CDN, switch CDN, or self-host pdfjs-dist + pdf-lib.';
+  }
+}
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.js';
 
     const { PDFDocument } = window.PDFLib;
 
