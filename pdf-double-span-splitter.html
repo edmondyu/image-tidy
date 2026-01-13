@@ -160,7 +160,11 @@
 
   <script>
     // PDF.js worker setup (CDN)
-    const pdfjsLib = window['pdfjs-dist/build/pdf'];
+    // On the CDN build, pdf.js exposes a global `pdfjsLib`.
+    const pdfjsLib = window.pdfjsLib || window['pdfjs-dist/build/pdf'];
+    if (!pdfjsLib) {
+      throw new Error('pdf.js failed to load (pdfjsLib is undefined). Check your network/CSP or the CDN script tag.');
+    }
     pdfjsLib.GlobalWorkerOptions.workerSrc =
       'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.js';
 
@@ -325,18 +329,27 @@ This can take a while for large PDFs.`);
       const f = $file.files?.[0];
       if (!f) return;
 
-      setStatus('Loading PDF…');
-      pdfBytes = await f.arrayBuffer();
+      // Keep buttons disabled until we successfully load the PDF
+      $previewBtn.disabled = true;
+      $convertBtn.disabled = true;
 
-      const loadingTask = pdfjsLib.getDocument({ data: pdfBytes });
-      pdfDoc = await loadingTask.promise;
+      try {
+        setStatus('Loading PDF…');
+        pdfBytes = await f.arrayBuffer();
 
-      setStatus(`Loaded: ${f.name}
-Pages: ${pdfDoc.numPages}`);
-      document.getElementById('previewBtn').disabled = false;
-      document.getElementById('convertBtn').disabled = false;
+        const loadingTask = pdfjsLib.getDocument({ data: pdfBytes });
+        pdfDoc = await loadingTask.promise;
 
-      try { await previewFirstPage(); } catch (e) { setStatus(`Loaded, but preview failed: ${e}`); }
+        setStatus(`Loaded: ${f.name}\nPages: ${pdfDoc.numPages}`);
+        $previewBtn.disabled = false;
+        $convertBtn.disabled = false;
+
+        // Auto-preview for convenience
+        try { await previewFirstPage(); } catch (e) { setStatus(`Loaded, but preview failed: ${e}`); }
+      } catch (e) {
+        console.error(e);
+        setStatus('Failed to load PDF.\n' + (e?.message || String(e)));
+      }
     });
 
     document.getElementById('previewBtn').addEventListener('click', () => previewFirstPage().catch(e => setStatus(String(e))));
