@@ -2,330 +2,115 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Extract Text from HTML – Toolbox</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-
+  <title>HTML / XHTML Text Extractor</title>
   <style>
     body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 1.5rem;
-      background: #f5f5f5;
-      color: #111827;
+      font-family: Arial, sans-serif;
+      margin: 20px;
     }
-    h1 { margin-top: 0; margin-bottom: 0.25rem; }
-    .subtitle { margin-top: 0; margin-bottom: 1.5rem; color: #6b7280; font-size: 0.95rem; }
-    .card {
-      background: #fff;
-      border-radius: 10px;
-      padding: 1.5rem;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-      margin-bottom: 1.5rem;
-    }
-    button {
-      cursor: pointer;
-      border: none;
-      border-radius: 6px;
-      padding: 0.6rem 1.1rem;
-      font-size: 0.95rem;
-      margin-right: 0.5rem;
-    }
-    button.primary { background: #2563eb; color: #fff; }
-    button.secondary { background: #e5e7eb; color: #111827; }
-    button:disabled { opacity: 0.6; cursor: default; }
-    input[type="file"] { margin: 0.75rem 0; }
-    input[type="text"] {
-      font-size: 0.85rem;
-      padding: 0.35rem 0.6rem;
-      border-radius: 6px;
-      border: 1px solid #d1d5db;
-      min-width: 220px;
-    }
-    .controls-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-      align-items: center;
-      margin-top: 0.5rem;
-    }
-    .tag-checkboxes label,
-    .option-label {
-      font-size: 0.85rem;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.25rem;
-      margin-right: 0.75rem;
-      margin-bottom: 0.25rem;
-    }
-    .hint { font-size: 0.85rem; color: #6b7280; }
-    .file-list { margin-top: 0.5rem; font-size: 0.9rem; }
-    .file-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.35rem 0;
-      border-bottom: 1px solid #e5e7eb;
-    }
-    .file-item:last-child { border-bottom: none; }
-    a.download-link {
-      font-size: 0.85rem;
-      text-decoration: none;
-      color: #2563eb;
-      margin-left: 0.7rem;
-    }
-    .summary { font-size: 0.9rem; margin-top: 0.5rem; color: #374151; }
-    .log {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    #output {
       white-space: pre-wrap;
-      background: #111827;
-      color: #e5e7eb;
-      padding: 1rem;
-      border-radius: 8px;
-      max-height: 260px;
-      overflow-y: auto;
-      font-size: 0.85rem;
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-top: 10px;
     }
-    a.back {
-      display: inline-block;
-      margin-bottom: 1rem;
-      font-size: 0.9rem;
-      text-decoration: none;
-      color: #2563eb;
+    #warningBox {
+      display: none;
+      margin: 10px 0;
+      padding: 10px;
+      border: 1px solid #d9534f;
+      background: #fff3f3;
+      color: #b52b27;
+      font-family: monospace;
+      white-space: pre-wrap;
     }
   </style>
-
-  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
 <body>
-<a class="back" href="index.html">← Back to Toolbox</a>
 
-<h1>Extract Text from HTML</h1>
-<p class="subtitle">
-  Extract structured text from HTML/XHTML files. Optional merge and Simplified → Traditional conversion supported.
-</p>
+<h2>HTML / XHTML Text Extractor</h2>
 
-<div class="card">
-  <h2>1. Select HTML/XHTML Files & Tags to Preserve</h2>
-  <input id="html-file-input" type="file" multiple
-         accept=".html,.htm,.xhtml,text/html,application/xhtml+xml" />
+<input type="file" id="fileInput" accept=".html,.xhtml,.htm" />
 
-  <div id="html-file-list" class="file-list">No files selected.</div>
+<div id="warningBox"></div>
 
-  <div class="controls-row"><strong>Preserve tags:</strong></div>
-
-  <div class="controls-row tag-checkboxes">
-    <label><input type="checkbox" class="tag-preserve-checkbox" value="h1" checked> &lt;h1&gt;</label>
-    <label><input type="checkbox" class="tag-preserve-checkbox" value="h2" checked> &lt;h2&gt;</label>
-    <label><input type="checkbox" class="tag-preserve-checkbox" value="h3" checked> &lt;h3&gt;</label>
-    <label><input type="checkbox" class="tag-preserve-checkbox" value="h4" checked> &lt;h4&gt;</label>
-    <label><input type="checkbox" class="tag-preserve-checkbox" value="h5" checked> &lt;h5&gt;</label>
-    <label><input type="checkbox" class="tag-preserve-checkbox" value="h6" checked> &lt;h6&gt;</label>
-  </div>
-
-  <div class="controls-row tag-checkboxes">
-    <label><input type="checkbox" class="tag-preserve-checkbox" value="b" checked> &lt;b&gt;</label>
-    <label><input type="checkbox" class="tag-preserve-checkbox" value="i" checked> &lt;i&gt;</label>
-    <label><input type="checkbox" class="tag-preserve-checkbox" value="u" checked> &lt;u&gt;</label>
-    <label><input type="checkbox" class="tag-preserve-checkbox" value="strong"> &lt;strong&gt;</label>
-    <label><input type="checkbox" class="tag-preserve-checkbox" value="em"> &lt;em&gt;</label>
-    <label><input type="checkbox" class="tag-preserve-checkbox" value="sup"> &lt;sup&gt;</label>
-    <label><input type="checkbox" class="tag-preserve-checkbox" value="sub"> &lt;sub&gt;</label>
-    <label><input type="checkbox" class="tag-preserve-checkbox" value="small"> &lt;small&gt;</label>
-    <label><input type="checkbox" class="tag-preserve-checkbox" value="a"> &lt;a&gt;</label>
-    <label><input type="checkbox" class="tag-preserve-checkbox" value="code"> &lt;code&gt;</label>
-    <label><input type="checkbox" class="tag-preserve-checkbox" value="span"> &lt;span&gt;</label>
-  </div>
-</div>
-
-<div class="card">
-  <h2>2. Extract & Download</h2>
-
-  <button id="process-html-btn" class="primary" disabled>Extract Text</button>
-  <button id="html-zip-btn" class="secondary" disabled>Download all as ZIP</button>
-  <button id="clear-html-btn" class="secondary">Clear</button>
-
-  <div class="controls-row" style="margin-top:0.75rem;">
-    <label class="option-label">
-      <input type="checkbox" id="merge-toggle" />
-      Merge extracted text into a single file (A → Z)
-    </label>
-    <input type="text" id="merge-filename" value="merged_text.txt" />
-  </div>
-
-  <div class="controls-row">
-    <label class="option-label">
-      <input type="checkbox" id="s2t-toggle" />
-      Convert Simplified → Traditional Chinese
-    </label>
-  </div>
-
-  <p class="summary" id="html-summary"></p>
-  <div id="html-downloads"></div>
-</div>
-
-<div class="card">
-  <h2>Logs</h2>
-  <div class="log" id="html-log"></div>
-</div>
+<div id="output"></div>
 
 <script>
-const htmlFileInput = document.getElementById("html-file-input");
-const processHtmlBtn = document.getElementById("process-html-btn");
-const clearHtmlBtn = document.getElementById("clear-html-btn");
-const htmlZipBtn = document.getElementById("html-zip-btn");
-const htmlLogEl = document.getElementById("html-log");
-const htmlDownloadsEl = document.getElementById("html-downloads");
-const htmlSummaryEl = document.getElementById("html-summary");
-const htmlFileListEl = document.getElementById("html-file-list");
+  const fileInput = document.getElementById("fileInput");
+  const output = document.getElementById("output");
 
-const tagCheckboxes = document.querySelectorAll(".tag-preserve-checkbox");
-const mergeToggle = document.getElementById("merge-toggle");
-const mergeFilenameInput = document.getElementById("merge-filename");
-const s2tToggle = document.getElementById("s2t-toggle");
+  fileInput.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-let selectedHtmlFiles = [];
-let generatedOutputs = [];
-let mergedTextContent = "";
-
-function log(msg) {
-  htmlLogEl.textContent += msg + "\n";
-  htmlLogEl.scrollTop = htmlLogEl.scrollHeight;
-}
-
-htmlFileInput.addEventListener("change", () => {
-  selectedHtmlFiles = Array.from(htmlFileInput.files || []);
-  htmlFileListEl.textContent =
-    selectedHtmlFiles.length === 0
-      ? "No files selected."
-      : selectedHtmlFiles.map(f => f.name).join(", ");
-  processHtmlBtn.disabled = selectedHtmlFiles.length === 0;
-});
-
-clearHtmlBtn.addEventListener("click", () => {
-  selectedHtmlFiles = [];
-  generatedOutputs = [];
-  mergedTextContent = "";
-  htmlFileInput.value = "";
-  htmlFileListEl.textContent = "No files selected.";
-  htmlDownloadsEl.innerHTML = "";
-  htmlSummaryEl.textContent = "";
-  htmlLogEl.textContent = "";
-  processHtmlBtn.disabled = true;
-  htmlZipBtn.disabled = true;
-});
-
-async function convertToTraditionalChinese(text) {
-  const resp = await fetch("/.netlify/functions/zhconvert", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text })
-  });
-  if (!resp.ok) throw new Error("zhconvert proxy failed");
-  const json = await resp.json();
-  return json.data.text;
-}
-
-processHtmlBtn.addEventListener("click", async () => {
-  generatedOutputs = [];
-  mergedTextContent = "";
-  htmlDownloadsEl.innerHTML = "";
-  htmlLogEl.textContent = "";
-  htmlZipBtn.disabled = true;
-
-  const preserveSet = new Set(
-    Array.from(tagCheckboxes).filter(cb => cb.checked).map(cb => cb.value)
-  );
-
-  const mergedBlocks = []; // { filename, text }
-
-  for (const file of selectedHtmlFiles) {
-    log("Processing " + file.name);
     const text = await file.text();
-    const doc = new DOMParser().parseFromString(text, "text/html");
+    const doc = parseDocument(text, file.name);
+    extractText(doc);
+  });
 
-    const els = Array.from(doc.querySelectorAll("h1,h2,h3,h4,h5,h6,p,img"));
-    let lines = [];
+  function parseDocument(text, fileName = "") {
+    const warningBox = document.getElementById("warningBox");
 
-    els.forEach(el => {
-      if (el.tagName.toLowerCase() === "img") {
-        const src = el.getAttribute("src");
-        if (src) lines.push("[" + src.split("/").pop() + "]");
-        return;
-      }
-      const tag = el.tagName.toLowerCase();
-      const inner = el.textContent.trim();
-      if (!inner) return;
-      if (preserveSet.has(tag)) {
-        lines.push(`<${tag}>${inner}</${tag}>`);
-      } else {
-        lines.push(inner);
-      }
-    });
+    // Detect XHTML-style self-closing script tags
+    const scriptSelfClosingRegex = /<script\b[^>]*\/>/i;
+    const hasSelfClosingScript = scriptSelfClosingRegex.test(text);
 
-    let mainText = lines.join("\n");
+    if (hasSelfClosingScript) {
+      warningBox.style.display = "block";
+      warningBox.textContent =
+        "⚠️ Warning detected:\n\n" +
+        "This document contains self-closing <script .../> tags.\n" +
+        "These are valid in XHTML/XML but will break HTML parsing.\n\n" +
+        "Parser switched to application/xhtml+xml mode.";
+    } else {
+      warningBox.style.display = "none";
+      warningBox.textContent = "";
+    }
 
-    if (s2tToggle.checked && mainText.trim()) {
-      try {
-        mainText = await convertToTraditionalChinese(mainText);
-      } catch (e) {
-        log("Conversion failed; original text kept.");
+    // Decide whether to parse as XHTML
+    const isXhtml =
+      /\.xhtml$/i.test(fileName) ||
+      text.trimStart().startsWith("<?xml") ||
+      text.includes('xmlns="http://www.w3.org/1999/xhtml"');
+
+    const mimeType = isXhtml
+      ? "application/xhtml+xml"
+      : "text/html";
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, mimeType);
+
+    // Catch XHTML parse errors
+    if (mimeType === "application/xhtml+xml") {
+      const parserError = doc.querySelector("parsererror");
+      if (parserError) {
+        warningBox.style.display = "block";
+        warningBox.textContent +=
+          "\n\n❌ XHTML parser error:\n" +
+          parserError.textContent.trim();
       }
     }
 
-    if (mergeToggle.checked) {
-      mergedBlocks.push({ filename: file.name, text: mainText.trim() });
-    }
-
-    const blob = new Blob([mainText], { type: "text/plain;charset=utf-8" });
-    generatedOutputs.push({
-      name: file.name.replace(/\.[^.]+$/, "") + ".txt",
-      blob
-    });
-
-    const url = URL.createObjectURL(blob);
-    const row = document.createElement("div");
-    row.className = "file-item";
-    row.innerHTML = `<span>${file.name}</span>
-      <a class="download-link" href="${url}" download>Download</a>`;
-    htmlDownloadsEl.appendChild(row);
+    return doc;
   }
 
-  if (mergeToggle.checked) {
-    mergedBlocks.sort((a, b) =>
-      a.filename.localeCompare(b.filename, "en", { sensitivity: "base" })
-    );
-
+  function extractText(doc) {
     const parts = [];
-    mergedBlocks.forEach(b => {
-      parts.push(`===== ${b.filename} =====`);
-      if (b.text) parts.push(b.text);
+
+    doc.querySelectorAll("h1,h2,h3,h4,h5,h6,p").forEach(el => {
+      const text = el.textContent.trim();
+      if (text) parts.push(text);
     });
 
-    mergedTextContent = parts.join("\n\n").trim() + "\n";
+    doc.querySelectorAll("img").forEach(img => {
+      const alt = img.getAttribute("alt");
+      if (alt) parts.push("[Image: " + alt + "]");
+    });
+
+    output.textContent = parts.join("\n\n");
   }
-
-  htmlSummaryEl.textContent = `Processed ${selectedHtmlFiles.length} file(s).`;
-  htmlZipBtn.disabled = generatedOutputs.length === 0;
-});
-
-htmlZipBtn.addEventListener("click", async () => {
-  const zip = new JSZip();
-
-  if (mergeToggle.checked && mergedTextContent) {
-    const name = mergeFilenameInput.value.trim() || "merged_text.txt";
-    zip.file(name, mergedTextContent);
-  } else {
-    generatedOutputs.forEach(o => zip.file(o.name, o.blob));
-  }
-
-  const blob = await zip.generateAsync({ type: "blob" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "html_extracted_outputs.zip";
-  a.click();
-});
 </script>
+
 </body>
 </html>
