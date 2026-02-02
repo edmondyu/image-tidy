@@ -92,6 +92,12 @@
 
   <div class="card">
     <h2>1. Upload image db CSV</h2>
+<label style="display:flex; gap:0.6rem; align-items:flex-start; margin:0.5rem 0 0.75rem 0; font-size:0.95rem;">
+  <input id="skip-csv" type="checkbox" />
+  <span>
+    Skip uploading image db CSV (assume all images are <strong>type 1</strong> and use the image filename as <code>alt</code> text)
+  </span>
+</label>
     <p>
       CSV columns expected: <code>filename,type,alt,caption</code><br/>
       <code>filename</code> should match markers like <code>[image-01.jpg]</code> inside your .txt files.
@@ -121,6 +127,7 @@
 
   <script>
     const csvInput          = document.getElementById("csv-input");
+    const skipCsvEl         = document.getElementById("skip-csv");
     const txtInput          = document.getElementById("txt-input");
     const convertBtn        = document.getElementById("convert-btn");
     const clearBtn          = document.getElementById("clear-btn");
@@ -131,6 +138,7 @@
 
     let imageTypes = null;         // { filename: {type, alt, caption}, ... }
     let selectedTxtFiles = [];     // Array<File>
+    let skipCsv = false;           // If true, skip CSV and assume type 1 + alt=filename
 
     function log(msg) {
       logEl.textContent += msg + "\n";
@@ -156,11 +164,39 @@
     }
 
     function updateConvertButtonState() {
-      convertBtn.disabled = !(imageTypes && selectedTxtFiles.length > 0);
+      // Enable when we either have a loaded CSV OR the user chose to skip CSV, and we have txt files.
+      convertBtn.disabled = !((skipCsv || imageTypes) && selectedTxtFiles.length > 0);
     }
+// ---------- Skip CSV option ----------
+skipCsvEl.addEventListener("change", () => {
+  skipCsv = !!skipCsvEl.checked;
+
+  // Reset CSV state whenever the mode changes, to preserve the original flow.
+  csvInput.value = "";
+  imageTypes = null;
+  csvSummaryEl.textContent = "";
+  logEl.textContent = "";
+
+  if (skipCsv) {
+    csvInput.disabled = true;
+    csvSummaryEl.textContent = "Skipping CSV. All images will be treated as type 1; <img> alt text will be the image filename.";
+    log("Skip CSV enabled. All images will be treated as type 1 and use filename as alt text.");
+  } else {
+    csvInput.disabled = false;
+    log("Skip CSV disabled. Please upload an image db CSV.");
+  }
+
+  updateConvertButtonState();
+});
 
     // ---------- CSV handling ----------
     csvInput.addEventListener("change", () => {
+      if (skipCsv) {
+        // Safety: CSV input should be disabled when skipping, but guard anyway.
+        log("Skip CSV is enabled — CSV upload is ignored.");
+        return;
+      }
+
       const file = csvInput.files && csvInput.files[0];
       imageTypes = null;
       csvSummaryEl.textContent = "";
@@ -233,6 +269,9 @@
     });
 
     clearBtn.addEventListener("click", () => {
+      skipCsvEl.checked = false;
+      skipCsv = false;
+      csvInput.disabled = false;
       csvInput.value = "";
       txtInput.value = "";
       imageTypes = null;
@@ -254,7 +293,7 @@
     }
 
     // ---------- Core conversion logic (JS port of your Python algorithm) ----------
-    function convertSingleTxtToXhtml(text, imageTypes) {
+    function convertSingleTxtToXhtml(text, imageTypes, skipCsv) {
       const lines = text.split(/\r?\n/);
       if (!lines.length) {
         throw new Error("Input text is empty");
@@ -350,13 +389,16 @@
         // image markers
         if (imageMarkerRegex.test(line)) {
           const imageFilename = line.slice(1, -1); // remove [ ]
-          const info = imageTypes[imageFilename];
+const info = skipCsv
+  ? { type: "1", alt: imageFilename, caption: "" }
+  : (imageTypes ? imageTypes[imageFilename] : null);
 
-          if (!info) {
-            formattedLines.push(`<p>${escapeHtml(line)}</p>\n`);
-            index++;
-            continue;
-          }
+if (!info) {
+  formattedLines.push(`<p>${escapeHtml(line)}</p>
+`);
+  index++;
+  continue;
+}
 
           image_type = info.type || "";
           const alt = escapeHtml(info.alt || "");
@@ -457,7 +499,7 @@
 
     // ---------- Convert & ZIP ----------
     convertBtn.addEventListener("click", async () => {
-      if (!imageTypes || selectedTxtFiles.length === 0) return;
+      if ((!skipCsv && !imageTypes) || selectedTxtFiles.length === 0) return;
 
       convertBtn.disabled = true;
       clearBtn.disabled = true;
@@ -474,7 +516,7 @@
           log(`\nProcessing: ${file.name}`);
           const text = await readFileAsText(file);
           try {
-            const xhtml = convertSingleTxtToXhtml(text, imageTypes);
+            const xhtml = convertSingleTxtToXhtml(text, imageTypes, skipCsv);
             const baseName = file.name.replace(/\.[^.]+$/, "");
             const outName = `${baseName}.xhtml`;
             zip.file(outName, xhtml);
