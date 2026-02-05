@@ -377,8 +377,29 @@
       const info = metadata.info || {};
       const xmp = metadata.metadata;
 
-      // Log all available info keys for debugging
-      log(`    Available PDF info keys: ${Object.keys(info).join(", ")}`);
+      // Log all available info keys and values for debugging
+      log(`    Available PDF info fields:`);
+      for (const [key, value] of Object.entries(info)) {
+        if (value && typeof value !== 'object') {
+          log(`      ${key}: ${String(value).substring(0, 100)}`);
+        }
+      }
+
+      // Helper function to find a field case-insensitively
+      function findInfoField(...fieldNames) {
+        for (const fieldName of fieldNames) {
+          // Check exact match first
+          if (info[fieldName]) return info[fieldName];
+          // Check case-insensitive match
+          const lowerFieldName = fieldName.toLowerCase();
+          for (const key of Object.keys(info)) {
+            if (key.toLowerCase() === lowerFieldName) {
+              return info[key];
+            }
+          }
+        }
+        return "";
+      }
 
       // Try to get XMP metadata if available
       let xmpTags = "";
@@ -413,9 +434,19 @@
         }
       }
 
-      // Check for custom PDF info fields (some PDF creators add custom fields)
-      const customComments = info.Comments || info.Comment || info.comments || "";
-      const customTags = info.Tags || info.Tag || info.tags || info.Keywords || "";
+      // Check for custom PDF info fields (various naming conventions)
+      // Tags can be: Tags, Tag, tags, Keywords, keywords
+      const customTags = findInfoField("Tags", "Tag", "tags", "keywords");
+      // Comments can be: Comments, Comment, comments, Description (in custom fields)
+      const customComments = findInfoField("Comments", "Comment", "comments", "注釋", "备注");
+
+      // Also check the Custom property if it exists (some PDF tools store custom fields there)
+      if (info.Custom && typeof info.Custom === 'object') {
+        log(`    Custom fields found:`);
+        for (const [key, value] of Object.entries(info.Custom)) {
+          log(`      ${key}: ${String(value).substring(0, 100)}`);
+        }
+      }
 
       return {
         title: info.Title || "",
