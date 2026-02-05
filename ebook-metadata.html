@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Extract Ebook Metadata – Toolbox</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      background: #f5f5f5;
+      color: #111827;
+    }
+    h1 {
+      margin-top: 0;
+      margin-bottom: 0.25rem;
+    }
+    .subtitle {
+      margin-top: 0;
+      margin-bottom: 1.5rem;
+      color: #6b7280;
+      font-size: 0.95rem;
+    }
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      margin-bottom: 1.5rem;
+    }
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1.1rem;
+      font-size: 0.95rem;
+      margin-right: 0.5rem;
+    }
+    button.primary {
+      background: #2563eb;
+      color: #fff;
+    }
+    button.secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    input[type="file"] {
+      margin: 0.75rem 0;
+    }
+    .hint {
+      font-size: 0.85rem;
+      color: #6b7280;
+      margin-top: 0.5rem;
+    }
+    .file-list {
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+    }
+    .file-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.35rem 0;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .file-item:last-child {
+      border-bottom: none;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      background: #e5e7eb;
+      color: #374151;
+      margin-left: 0.4rem;
+    }
+    .badge.epub {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    .badge.pdf {
+      background: #fef3c7;
+      color: #92400e;
+    }
+    .summary {
+      font-size: 0.9rem;
+      margin-top: 0.5rem;
+      color: #374151;
+    }
+    .log {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      white-space: pre-wrap;
+      background: #111827;
+      color: #e5e7eb;
+      padding: 1rem;
+      border-radius: 8px;
+      max-height: 260px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+    }
+    a.back {
+      display: inline-block;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+      text-decoration: none;
+      color: #2563eb;
+    }
+    .preview-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      margin-top: 1rem;
+    }
+    .preview-table th,
+    .preview-table td {
+      border: 1px solid #e5e7eb;
+      padding: 0.5rem;
+      text-align: left;
+    }
+    .preview-table th {
+      background: #f9fafb;
+      font-weight: 600;
+    }
+    .preview-table td {
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .table-wrapper {
+      overflow-x: auto;
+      margin-top: 1rem;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+</head>
+<body>
+  <a class="back" href="index.html">← Back to Toolbox</a>
+  <h1>Extract Ebook Metadata</h1>
+  <p class="subtitle">
+    Extract metadata from EPUB and PDF ebook files and export to CSV. All processing is done locally in your browser.
+  </p>
+
+  <div class="card">
+    <h2>1. Select Ebook Files</h2>
+    <p>Supported formats: <strong>.epub, .pdf</strong></p>
+    <input id="file-input" type="file" multiple accept=".epub,.pdf,application/epub+zip,application/pdf" />
+    <p class="hint">
+      Extracts: Title, Author, Publisher, Date, Language, ISBN/Identifier, Subject, Description.
+    </p>
+    <div class="file-list" id="file-list">No files selected.</div>
+  </div>
+
+  <div class="card">
+    <h2>2. Extract & Download</h2>
+    <button id="extract-btn" class="primary" disabled>Extract Metadata</button>
+    <button id="download-csv-btn" class="secondary" disabled>Download CSV</button>
+    <button id="clear-btn" class="secondary">Clear</button>
+    <p class="summary" id="summary"></p>
+    <div class="table-wrapper" id="preview"></div>
+  </div>
+
+  <div class="card">
+    <h2>Logs</h2>
+    <div class="log" id="log"></div>
+  </div>
+
+  <script type="module">
+    import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs";
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.mjs";
+
+    const fileInput = document.getElementById("file-input");
+    const extractBtn = document.getElementById("extract-btn");
+    const downloadCsvBtn = document.getElementById("download-csv-btn");
+    const clearBtn = document.getElementById("clear-btn");
+    const logEl = document.getElementById("log");
+    const fileListEl = document.getElementById("file-list");
+    const previewEl = document.getElementById("preview");
+    const summaryEl = document.getElementById("summary");
+
+    let selectedFiles = [];
+    let extractedData = [];
+
+    const CSV_COLUMNS = [
+      "Filename",
+      "Format",
+      "Title",
+      "Author",
+      "Publisher",
+      "Date",
+      "Language",
+      "Identifier",
+      "Subject",
+      "Description"
+    ];
+
+    function log(msg) {
+      logEl.textContent += msg + "\n";
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function bytesToKB(bytes) {
+      return (bytes / 1024).toFixed(2) + " KB";
+    }
+
+    function naturalSortKey(str) {
+      return str.split(/(\d+)/).map(part => {
+        const n = parseInt(part, 10);
+        return isNaN(n) ? part.toLowerCase() : n;
+      });
+    }
+
+    function naturalCompare(a, b) {
+      const ak = naturalSortKey(a);
+      const bk = naturalSortKey(b);
+      const len = Math.max(ak.length, bk.length);
+      for (let i = 0; i < len; i++) {
+        if (ak[i] === undefined) return -1;
+        if (bk[i] === undefined) return 1;
+        if (ak[i] < bk[i]) return -1;
+        if (ak[i] > bk[i]) return 1;
+      }
+      return 0;
+    }
+
+    function updateFileList() {
+      fileListEl.innerHTML = "";
+      if (selectedFiles.length === 0) {
+        fileListEl.textContent = "No files selected.";
+        extractBtn.disabled = true;
+        return;
+      }
+      const frag = document.createDocumentFragment();
+      selectedFiles.forEach(file => {
+        const div = document.createElement("div");
+        div.className = "file-item";
+        const left = document.createElement("span");
+        left.textContent = file.name;
+        const badge = document.createElement("span");
+        const isEpub = /\.epub$/i.test(file.name);
+        badge.className = `badge ${isEpub ? "epub" : "pdf"}`;
+        badge.textContent = isEpub ? "EPUB" : "PDF";
+        left.appendChild(badge);
+        const sizeSpan = document.createElement("span");
+        sizeSpan.textContent = bytesToKB(file.size);
+        div.appendChild(left);
+        div.appendChild(sizeSpan);
+        frag.appendChild(div);
+      });
+      fileListEl.appendChild(frag);
+      extractBtn.disabled = false;
+    }
+
+    function clearTool() {
+      selectedFiles = [];
+      extractedData = [];
+      fileInput.value = "";
+      fileListEl.textContent = "No files selected.";
+      previewEl.innerHTML = "";
+      summaryEl.textContent = "";
+      extractBtn.disabled = true;
+      downloadCsvBtn.disabled = true;
+      logEl.textContent = "";
+    }
+
+    function escapeXml(str) {
+      if (!str) return "";
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function getTextContent(element) {
+      return element ? element.textContent.trim() : "";
+    }
+
+    async function extractEpubMetadata(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const zip = await JSZip.loadAsync(arrayBuffer);
+
+      // Find the OPF file path from container.xml
+      const containerXml = await zip.file("META-INF/container.xml")?.async("text");
+      if (!containerXml) {
+        throw new Error("Invalid EPUB: missing container.xml");
+      }
+
+      const parser = new DOMParser();
+      const containerDoc = parser.parseFromString(containerXml, "application/xml");
+      const rootfileEl = containerDoc.querySelector("rootfile");
+      if (!rootfileEl) {
+        throw new Error("Invalid EPUB: missing rootfile element");
+      }
+
+      const opfPath = rootfileEl.getAttribute("full-path");
+      if (!opfPath) {
+        throw new Error("Invalid EPUB: missing OPF path");
+      }
+
+      // Read and parse the OPF file
+      const opfContent = await zip.file(opfPath)?.async("text");
+      if (!opfContent) {
+        throw new Error(`Invalid EPUB: missing OPF file at ${opfPath}`);
+      }
+
+      const opfDoc = parser.parseFromString(opfContent, "application/xml");
+      const metadata = opfDoc.querySelector("metadata");
+      if (!metadata) {
+        throw new Error("Invalid EPUB: missing metadata element");
+      }
+
+      // Extract Dublin Core metadata
+      // Note: namespace handling - try both with and without prefix
+      const getMetaValue = (tagName) => {
+        const el = metadata.querySelector(tagName) ||
+                   metadata.getElementsByTagNameNS("http://purl.org/dc/elements/1.1/", tagName.replace("dc:", ""))[0];
+        return getTextContent(el);
+      };
+
+      const title = getMetaValue("dc:title") || getMetaValue("title");
+      const creator = getMetaValue("dc:creator") || getMetaValue("creator");
+      const publisher = getMetaValue("dc:publisher") || getMetaValue("publisher");
+      const date = getMetaValue("dc:date") || getMetaValue("date");
+      const language = getMetaValue("dc:language") || getMetaValue("language");
+      const subject = getMetaValue("dc:subject") || getMetaValue("subject");
+      const description = getMetaValue("dc:description") || getMetaValue("description");
+
+      // Get identifier (often ISBN)
+      let identifier = getMetaValue("dc:identifier") || getMetaValue("identifier");
+
+      // Try to find ISBN specifically
+      const identifiers = metadata.querySelectorAll("identifier, dc\\:identifier");
+      for (const idEl of identifiers) {
+        const scheme = idEl.getAttribute("opf:scheme") || idEl.getAttribute("scheme") || "";
+        const idValue = idEl.textContent.trim();
+        if (scheme.toLowerCase() === "isbn" || /^(97[89])?\d{9}[\dXx]$/.test(idValue.replace(/-/g, ""))) {
+          identifier = idValue;
+          break;
+        }
+      }
+
+      return {
+        title,
+        author: creator,
+        publisher,
+        date,
+        language,
+        identifier,
+        subject,
+        description
+      };
+    }
+
+    async function extractPdfMetadata(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const metadata = await pdf.getMetadata();
+
+      const info = metadata.info || {};
+
+      return {
+        title: info.Title || "",
+        author: info.Author || "",
+        publisher: info.Producer || "", // PDF doesn't have a direct publisher field
+        date: info.CreationDate ? formatPdfDate(info.CreationDate) : "",
+        language: "", // PDF metadata doesn't typically include language
+        identifier: "", // PDF doesn't have ISBN field
+        subject: info.Subject || "",
+        description: info.Keywords || "" // Using keywords as description for PDF
+      };
+    }
+
+    function formatPdfDate(pdfDate) {
+      // PDF dates are often in format: D:YYYYMMDDHHmmSS
+      if (!pdfDate) return "";
+      const match = pdfDate.match(/D:(\d{4})(\d{2})?(\d{2})?/);
+      if (match) {
+        const year = match[1];
+        const month = match[2] || "01";
+        const day = match[3] || "01";
+        return `${year}-${month}-${day}`;
+      }
+      return pdfDate;
+    }
+
+    function escapeCsvField(value) {
+      if (!value) return "";
+      const str = String(value).replace(/\r?\n/g, " ").trim();
+      if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+        return '"' + str.replace(/"/g, '""') + '"';
+      }
+      return str;
+    }
+
+    function generateCsv(data) {
+      const header = CSV_COLUMNS.join(",");
+      const rows = data.map(row => {
+        return CSV_COLUMNS.map(col => escapeCsvField(row[col])).join(",");
+      });
+      return header + "\n" + rows.join("\n");
+    }
+
+    function renderPreviewTable(data) {
+      if (data.length === 0) {
+        previewEl.innerHTML = "<p>No data extracted.</p>";
+        return;
+      }
+
+      const table = document.createElement("table");
+      table.className = "preview-table";
+
+      // Header
+      const thead = document.createElement("thead");
+      const headerRow = document.createElement("tr");
+      CSV_COLUMNS.forEach(col => {
+        const th = document.createElement("th");
+        th.textContent = col;
+        headerRow.appendChild(th);
+      });
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+
+      // Body
+      const tbody = document.createElement("tbody");
+      data.forEach(row => {
+        const tr = document.createElement("tr");
+        CSV_COLUMNS.forEach(col => {
+          const td = document.createElement("td");
+          td.textContent = row[col] || "";
+          td.title = row[col] || ""; // Show full text on hover
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+
+      previewEl.innerHTML = "";
+      previewEl.appendChild(table);
+    }
+
+    fileInput.addEventListener("change", () => {
+      const files = Array.from(fileInput.files || []);
+      const filtered = files.filter(f => /\.(epub|pdf)$/i.test(f.name));
+      filtered.sort((a, b) => naturalCompare(a.name, b.name));
+      selectedFiles = filtered;
+      extractedData = [];
+      previewEl.innerHTML = "";
+      summaryEl.textContent = "";
+      downloadCsvBtn.disabled = true;
+      logEl.textContent = "";
+
+      if (files.length !== filtered.length) {
+        log("Some files were ignored (unsupported format).");
+      }
+      if (filtered.length === 0) {
+        fileListEl.textContent = "No valid ebook files selected.";
+        extractBtn.disabled = true;
+      } else {
+        updateFileList();
+        const epubCount = filtered.filter(f => /\.epub$/i.test(f.name)).length;
+        const pdfCount = filtered.length - epubCount;
+        log(`Selected ${filtered.length} file(s): ${epubCount} EPUB, ${pdfCount} PDF.`);
+      }
+    });
+
+    clearBtn.addEventListener("click", clearTool);
+
+    extractBtn.addEventListener("click", async () => {
+      if (selectedFiles.length === 0) return;
+
+      extractBtn.disabled = true;
+      clearBtn.disabled = true;
+      downloadCsvBtn.disabled = true;
+      previewEl.innerHTML = "";
+      extractedData = [];
+      summaryEl.textContent = "";
+      logEl.textContent = "";
+
+      log(`Starting metadata extraction for ${selectedFiles.length} file(s)...`);
+
+      let successCount = 0;
+
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        const index = i + 1;
+        const isEpub = /\.epub$/i.test(file.name);
+        const format = isEpub ? "EPUB" : "PDF";
+
+        log(`\n[${index}/${selectedFiles.length}] Processing "${file.name}" (${format})`);
+
+        try {
+          let metadata;
+          if (isEpub) {
+            metadata = await extractEpubMetadata(file);
+          } else {
+            metadata = await extractPdfMetadata(file);
+          }
+
+          const row = {
+            Filename: file.name,
+            Format: format,
+            Title: metadata.title,
+            Author: metadata.author,
+            Publisher: metadata.publisher,
+            Date: metadata.date,
+            Language: metadata.language,
+            Identifier: metadata.identifier,
+            Subject: metadata.subject,
+            Description: metadata.description
+          };
+
+          extractedData.push(row);
+          successCount++;
+
+          log(`  Title: ${metadata.title || "(empty)"}`);
+          log(`  Author: ${metadata.author || "(empty)"}`);
+          if (metadata.publisher) log(`  Publisher: ${metadata.publisher}`);
+          if (metadata.identifier) log(`  Identifier: ${metadata.identifier}`);
+        } catch (err) {
+          log(`  Error: ${err.message || err}`);
+          // Add row with error
+          extractedData.push({
+            Filename: file.name,
+            Format: format,
+            Title: `[Error: ${err.message}]`,
+            Author: "",
+            Publisher: "",
+            Date: "",
+            Language: "",
+            Identifier: "",
+            Subject: "",
+            Description: ""
+          });
+        }
+      }
+
+      log(`\nExtraction complete: ${successCount}/${selectedFiles.length} succeeded.`);
+      summaryEl.textContent = `Extracted metadata from ${successCount} of ${selectedFiles.length} file(s).`;
+
+      renderPreviewTable(extractedData);
+
+      extractBtn.disabled = false;
+      clearBtn.disabled = false;
+
+      if (extractedData.length > 0) {
+        downloadCsvBtn.disabled = false;
+      }
+    });
+
+    downloadCsvBtn.addEventListener("click", () => {
+      if (extractedData.length === 0) return;
+
+      const csv = generateCsv(extractedData);
+      const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }); // BOM for Excel
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "ebook_metadata.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      log("\nCSV file downloaded.");
+    });
+  </script>
+</body>
+</html>
