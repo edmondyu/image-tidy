@@ -153,7 +153,7 @@
     <p>Supported formats: <strong>.epub, .pdf</strong></p>
     <input id="file-input" type="file" multiple accept=".epub,.pdf,application/epub+zip,application/pdf" />
     <p class="hint">
-      Extracts: Title, Author, Publisher, Date, Language, ISBN/Identifier, Subject, Description.
+      Extracts: Title, Author, Publisher, Date, Language, ISBN/Identifier, Subject, Description, Tags, Comments.
     </p>
     <div class="file-list" id="file-list">No files selected.</div>
   </div>
@@ -200,7 +200,9 @@
       "Language",
       "Identifier",
       "Subject",
-      "Description"
+      "Description",
+      "Tags",
+      "Comments"
     ];
 
     function log(msg) {
@@ -348,6 +350,11 @@
         }
       }
 
+      // For EPUB, subject can contain multiple entries (tags)
+      const subjects = metadata.querySelectorAll("subject, dc\\:subject");
+      const allSubjects = Array.from(subjects).map(el => el.textContent.trim()).filter(Boolean);
+      const tags = allSubjects.length > 1 ? allSubjects.join("; ") : "";
+
       return {
         title,
         author: creator,
@@ -355,8 +362,10 @@
         date,
         language,
         identifier,
-        subject,
-        description
+        subject: allSubjects[0] || subject,
+        description,
+        tags: tags || "",
+        comments: "" // EPUB doesn't typically have a comments field
       };
     }
 
@@ -366,16 +375,59 @@
       const metadata = await pdf.getMetadata();
 
       const info = metadata.info || {};
+      const xmp = metadata.metadata;
+
+      // Log all available info keys for debugging
+      log(`    Available PDF info keys: ${Object.keys(info).join(", ")}`);
+
+      // Try to get XMP metadata if available
+      let xmpTags = "";
+      let xmpComments = "";
+      let xmpLanguage = "";
+      let xmpPublisher = "";
+
+      if (xmp) {
+        log(`    XMP metadata available`);
+        // XMP metadata access - try common fields
+        try {
+          // Try to get all XMP data
+          const xmpAll = xmp.getAll();
+          if (xmpAll) {
+            log(`    XMP fields: ${Object.keys(xmpAll).join(", ")}`);
+            // Common XMP fields for tags/keywords
+            xmpTags = xmpAll["dc:subject"] || xmpAll["pdf:Keywords"] || "";
+            xmpComments = xmpAll["dc:description"] || xmpAll["pdfx:Comments"] || "";
+            xmpLanguage = xmpAll["dc:language"] || "";
+            xmpPublisher = xmpAll["dc:publisher"] || "";
+          }
+        } catch (e) {
+          // Fallback: try individual gets
+          try {
+            xmpTags = xmp.get("dc:subject") || "";
+            xmpComments = xmp.get("dc:description") || "";
+            xmpLanguage = xmp.get("dc:language") || "";
+            xmpPublisher = xmp.get("dc:publisher") || "";
+          } catch (e2) {
+            log(`    XMP parsing error: ${e2.message}`);
+          }
+        }
+      }
+
+      // Check for custom PDF info fields (some PDF creators add custom fields)
+      const customComments = info.Comments || info.Comment || info.comments || "";
+      const customTags = info.Tags || info.Tag || info.tags || info.Keywords || "";
 
       return {
         title: info.Title || "",
         author: info.Author || "",
-        publisher: info.Producer || "", // PDF doesn't have a direct publisher field
+        publisher: xmpPublisher || info.Producer || "",
         date: info.CreationDate ? formatPdfDate(info.CreationDate) : "",
-        language: "", // PDF metadata doesn't typically include language
-        identifier: "", // PDF doesn't have ISBN field
+        language: xmpLanguage || "",
+        identifier: info.ISBN || "",
         subject: info.Subject || "",
-        description: info.Keywords || "" // Using keywords as description for PDF
+        description: info.Keywords || "",
+        tags: xmpTags || customTags || "",
+        comments: xmpComments || customComments || ""
       };
     }
 
@@ -515,7 +567,9 @@
             Language: metadata.language,
             Identifier: metadata.identifier,
             Subject: metadata.subject,
-            Description: metadata.description
+            Description: metadata.description,
+            Tags: metadata.tags || "",
+            Comments: metadata.comments || ""
           };
 
           extractedData.push(row);
@@ -525,6 +579,8 @@
           log(`  Author: ${metadata.author || "(empty)"}`);
           if (metadata.publisher) log(`  Publisher: ${metadata.publisher}`);
           if (metadata.identifier) log(`  Identifier: ${metadata.identifier}`);
+          if (metadata.tags) log(`  Tags: ${metadata.tags}`);
+          if (metadata.comments) log(`  Comments: ${metadata.comments}`);
         } catch (err) {
           log(`  Error: ${err.message || err}`);
           // Add row with error
@@ -538,7 +594,9 @@
             Language: "",
             Identifier: "",
             Subject: "",
-            Description: ""
+            Description: "",
+            Tags: "",
+            Comments: ""
           });
         }
       }
