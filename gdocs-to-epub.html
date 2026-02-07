@@ -366,8 +366,8 @@
 
       showProgress('Generating EPUB structure...', 50);
 
-      // Create EPUB
-      const epub = await createEPUB(metadata, chapters, processedImages);
+      // Create EPUB (pass splitBy for CSS generation)
+      const epub = await createEPUB(metadata, chapters, processedImages, splitBy);
 
       showProgress('Packaging EPUB...', 80);
 
@@ -631,7 +631,7 @@
     }
 
     // Create EPUB structure
-    async function createEPUB(metadata, chapters, images) {
+    async function createEPUB(metadata, chapters, images, splitBy) {
       const zip = new JSZip();
 
       // 1. mimetype (uncompressed)
@@ -660,7 +660,7 @@
       }
 
       // 4. Add CSS files
-      zip.file('OEBPS/Styles/book-style.css', generateBookCSS());
+      zip.file('OEBPS/Styles/book-style.css', generateBookCSS(splitBy));
 
       // 5. Create chapter XHTML files
       const chapterFiles = [];
@@ -735,23 +735,40 @@ ${bodyContent}
         return { html: `<h3>${escapeXML(el.textContent.trim())}</h3>`, isFootnote: false };
       } else if (tagName === 'P') {
         // Check for footnote definition (Google Docs format)
-        const footnoteLink = el.querySelector('a[href^="#ftnt_ref"]');
-        if (footnoteLink && footnoteLink.id && footnoteLink.id.match(/^ftnt\d+$/)) {
-          const num = footnoteLink.id.replace('ftnt', '');
-          const displayNum = footnoteLink.textContent.replace(/[\[\]]/g, '');
+        // Look for <a> tags with href starting with #ftnt_ref or id starting with ftnt
+        const footnoteLink = el.querySelector('a[href^="#ftnt_ref"], a[id^="ftnt"]');
+        if (footnoteLink) {
+          // Extract footnote number from either id or href
+          let num = null;
+          let displayNum = null;
 
-          // Get the content after the footnote number
-          let content = el.innerHTML;
-          // Remove the footnote link from content
-          content = content.replace(/<a[^>]+href="#ftnt_ref\d+"[^>]*>\[\d+\]<\/a>/, '');
-          content = cleanTextContent({ innerHTML: content });
+          if (footnoteLink.id && footnoteLink.id.match(/^ftnt\d+$/)) {
+            // Format: <a id="ftnt5" href="#ftnt_ref5">[5]</a>
+            num = footnoteLink.id.replace('ftnt', '');
+            displayNum = footnoteLink.textContent.replace(/[\[\]]/g, '').trim();
+          } else if (footnoteLink.getAttribute('href') && footnoteLink.getAttribute('href').match(/#ftnt_ref\d+/)) {
+            // Format: <a href="#ftnt_ref5">[5]</a>
+            const match = footnoteLink.getAttribute('href').match(/#ftnt_ref(\d+)/);
+            if (match) {
+              num = match[1];
+              displayNum = footnoteLink.textContent.replace(/[\[\]]/g, '').trim();
+            }
+          }
 
-          // Convert to EPUB footnote format - mark as footnote for end placement
-          const footnoteHTML = `<dl class="footnote" id="note_${num}">
+          if (num) {
+            // Get the content after the footnote number
+            let content = el.innerHTML;
+            // Remove the footnote link from content
+            content = content.replace(/<a[^>]*>\[?\d+\]?<\/a>/, '');
+            content = cleanTextContent({ innerHTML: content });
+
+            // Convert to EPUB footnote format - mark as footnote for end placement
+            const footnoteHTML = `<dl class="footnote" id="note_${num}">
   <dt>[<a href="#back_note_${num}" title="${displayNum}">←${displayNum}</a>]</dt>
   <dd><p>${content}</p></dd>
 </dl>`;
-          return { html: footnoteHTML, isFootnote: true };
+            return { html: footnoteHTML, isFootnote: true };
+          }
         }
 
         // Check for images
@@ -803,7 +820,8 @@ ${bodyContent}
       html = html.replace(/id="[^"]*"/g, '');
 
       // Convert Google Docs footnote references to EPUB format
-      html = html.replace(/<sup>\s*<a[^>]+href="#ftnt(\d+)"[^>]+id="ftnt_ref\d+"[^>]*>\[(\d+)\]<\/a>\s*<\/sup>/gi, (match, num, displayNum) => {
+      // Handle both formats: with and without id attribute
+      html = html.replace(/<sup>\s*<a[^>]*href="#ftnt(\d+)"[^>]*>\[(\d+)\]<\/a>\s*<\/sup>/gi, (match, num, displayNum) => {
         return `<sup><a class="noteref" href="#note_${num}" id="back_note_${num}" role="doc-noteref" title="${displayNum}">${displayNum}</a></sup>`;
       });
 
@@ -896,7 +914,17 @@ ${bodyContent}
     }
 
     // Generate book CSS
-    function generateBookCSS() {
+    function generateBookCSS(splitBy) {
+      // Determine which heading levels should have page breaks
+      let pageBreakCSS = '';
+      if (splitBy === 'h1') {
+        pageBreakCSS = 'h1 { page-break-before: always; }\n';
+      } else if (splitBy === 'h2') {
+        pageBreakCSS = 'h1, h2 { page-break-before: always; }\n';
+      } else if (splitBy === 'h3') {
+        pageBreakCSS = 'h1, h2, h3 { page-break-before: always; }\n';
+      }
+
       return `/* EPUB Book Styles */
 
 body {
@@ -912,6 +940,7 @@ h1, h2, h3 {
   margin-bottom: 0.5em;
 }
 
+${pageBreakCSS}
 h1 {
   font-size: 1.8em;
   text-align: center;
