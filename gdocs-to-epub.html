@@ -681,7 +681,7 @@
       });
     }
 
-    // Process cover image: convert to JPG and get dimensions
+    // Process cover image: resize, compress, and get dimensions
     async function processCoverImage(file) {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -690,12 +690,29 @@
         img.onload = async () => {
           URL.revokeObjectURL(url);
 
-          const width = img.width;
-          const height = img.height;
+          // Store original dimensions for cover.xhtml
+          const originalWidth = img.width;
+          const originalHeight = img.height;
 
-          // Create canvas for conversion to JPG
+          // Create canvas for resizing/compression
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
+
+          // Resize if needed (max 1800x1800, same as other images)
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1800;
+
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
           canvas.width = width;
           canvas.height = height;
 
@@ -704,13 +721,16 @@
           ctx.fillRect(0, 0, width, height);
           ctx.drawImage(img, 0, 0, width, height);
 
-          // Convert to JPG with quality 0.95 (high quality for cover)
-          const blob = await canvasToBlob(canvas, 'image/jpeg', 0.95);
-          const arrayBuffer = await blob.arrayBuffer();
+          // Initial conversion to JPG
+          const resizedBlob = await canvasToBlob(canvas, 'image/jpeg', 0.85);
+
+          // Compress iteratively (same as other images)
+          const compressedBlob = await compressImageFromCanvas(canvas, resizedBlob, 50);
+          const arrayBuffer = await compressedBlob.arrayBuffer();
 
           resolve({
             data: arrayBuffer,
-            dimensions: { width, height }
+            dimensions: { width: originalWidth, height: originalHeight }
           });
         };
 
