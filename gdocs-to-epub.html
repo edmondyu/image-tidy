@@ -1006,8 +1006,8 @@
           const compressedBlob = await compressImage(imageFile);
           const arrayBuffer = await compressedBlob.arrayBuffer();
 
-          // Always output as JPG after compression
-          const newFilename = `image-${String(i + 1).padStart(3, '0')}.jpg`;
+          // Use processed array length for sequential numbering (no gaps)
+          const newFilename = `image-${String(processed.length + 1).padStart(3, '0')}.jpg`;
 
           processed.push({
             filename: newFilename,
