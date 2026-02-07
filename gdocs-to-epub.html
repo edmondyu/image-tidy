@@ -456,7 +456,7 @@
         NodeFilter.SHOW_ELEMENT,
         {
           acceptNode: function(node) {
-            if (['H1', 'H2', 'H3', 'P', 'UL', 'OL'].includes(node.tagName)) {
+            if (['H1', 'H2', 'H3', 'P', 'UL', 'OL', 'DIV'].includes(node.tagName)) {
               return NodeFilter.FILTER_ACCEPT;
             }
             return NodeFilter.FILTER_SKIP;
@@ -723,6 +723,48 @@ ${bodyContent}
 </html>`;
     }
 
+    // Check if element is a footnote definition
+    function checkForFootnoteDefinition(el, images) {
+      // Look for <a> tags with href starting with #ftnt_ref or id starting with ftnt
+      const footnoteLink = el.querySelector('a[href^="#ftnt_ref"], a[id^="ftnt"]');
+      if (!footnoteLink) return null;
+
+      // Extract footnote number from either id or href
+      let num = null;
+      let displayNum = null;
+
+      if (footnoteLink.id && footnoteLink.id.match(/^ftnt\d+$/)) {
+        // Format: <a id="ftnt5" href="#ftnt_ref5">[5]</a>
+        num = footnoteLink.id.replace('ftnt', '');
+        displayNum = footnoteLink.textContent.replace(/[\[\]]/g, '').trim();
+      } else if (footnoteLink.getAttribute('href') && footnoteLink.getAttribute('href').match(/#ftnt_ref\d+/)) {
+        // Format: <a href="#ftnt_ref5">[5]</a>
+        const match = footnoteLink.getAttribute('href').match(/#ftnt_ref(\d+)/);
+        if (match) {
+          num = match[1];
+          displayNum = footnoteLink.textContent.replace(/[\[\]]/g, '').trim();
+        }
+      }
+
+      if (!num) return null;
+
+      // Get the content after the footnote number
+      let content = el.innerHTML;
+      // Remove the footnote link from content
+      content = content.replace(/<a[^>]*>\[?\d+\]?<\/a>/, '');
+      content = cleanTextContent({ innerHTML: content });
+
+      // Don't include if content is empty
+      if (!content.trim()) return null;
+
+      // Convert to EPUB footnote format - mark as footnote for end placement
+      const footnoteHTML = `<dl class="footnote" id="note_${num}">
+  <dt>[<a href="#back_note_${num}" title="${displayNum}">←${displayNum}</a>]</dt>
+  <dd><p>${content}</p></dd>
+</dl>`;
+      return { html: footnoteHTML, isFootnote: true };
+    }
+
     // Clean HTML element for EPUB
     function cleanElementHTML(el, images) {
       const tagName = el.tagName;
@@ -733,43 +775,19 @@ ${bodyContent}
         return { html: `<h2>${escapeXML(el.textContent.trim())}</h2>`, isFootnote: false };
       } else if (tagName === 'H3') {
         return { html: `<h3>${escapeXML(el.textContent.trim())}</h3>`, isFootnote: false };
-      } else if (tagName === 'P') {
-        // Check for footnote definition (Google Docs format)
-        // Look for <a> tags with href starting with #ftnt_ref or id starting with ftnt
-        const footnoteLink = el.querySelector('a[href^="#ftnt_ref"], a[id^="ftnt"]');
-        if (footnoteLink) {
-          // Extract footnote number from either id or href
-          let num = null;
-          let displayNum = null;
-
-          if (footnoteLink.id && footnoteLink.id.match(/^ftnt\d+$/)) {
-            // Format: <a id="ftnt5" href="#ftnt_ref5">[5]</a>
-            num = footnoteLink.id.replace('ftnt', '');
-            displayNum = footnoteLink.textContent.replace(/[\[\]]/g, '').trim();
-          } else if (footnoteLink.getAttribute('href') && footnoteLink.getAttribute('href').match(/#ftnt_ref\d+/)) {
-            // Format: <a href="#ftnt_ref5">[5]</a>
-            const match = footnoteLink.getAttribute('href').match(/#ftnt_ref(\d+)/);
-            if (match) {
-              num = match[1];
-              displayNum = footnoteLink.textContent.replace(/[\[\]]/g, '').trim();
-            }
-          }
-
-          if (num) {
-            // Get the content after the footnote number
-            let content = el.innerHTML;
-            // Remove the footnote link from content
-            content = content.replace(/<a[^>]*>\[?\d+\]?<\/a>/, '');
-            content = cleanTextContent({ innerHTML: content });
-
-            // Convert to EPUB footnote format - mark as footnote for end placement
-            const footnoteHTML = `<dl class="footnote" id="note_${num}">
-  <dt>[<a href="#back_note_${num}" title="${displayNum}">←${displayNum}</a>]</dt>
-  <dd><p>${content}</p></dd>
-</dl>`;
-            return { html: footnoteHTML, isFootnote: true };
-          }
+      } else if (tagName === 'DIV') {
+        // Check if DIV contains a footnote definition
+        const footnotePara = el.querySelector('p');
+        if (footnotePara) {
+          const footnoteResult = checkForFootnoteDefinition(footnotePara, images);
+          if (footnoteResult) return footnoteResult;
         }
+        // Otherwise skip DIVs
+        return null;
+      } else if (tagName === 'P') {
+        // Check for footnote definition first
+        const footnoteResult = checkForFootnoteDefinition(el, images);
+        if (footnoteResult) return footnoteResult;
 
         // Check for images
         const img = el.querySelector('img');
