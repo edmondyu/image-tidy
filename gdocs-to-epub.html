@@ -264,6 +264,12 @@
   <div class="card">
     <h2>Step 2: Book Metadata</h2>
 
+    <div class="form-group">
+      <label for="metadataCSV">Import Metadata from CSV (Optional)</label>
+      <input type="file" id="metadataCSV" accept=".csv" />
+      <div class="hint">Upload a CSV file to auto-fill metadata fields. Only the first data row will be used.</div>
+    </div>
+
     <div class="two-col">
       <div class="form-group">
         <label for="bookTitle">Book Title *</label>
@@ -271,15 +277,28 @@
       </div>
 
       <div class="form-group">
-        <label for="bookAuthor">Author *</label>
-        <input type="text" id="bookAuthor" placeholder="Author name" required />
+        <label for="bookSubtitle">Book Subtitle</label>
+        <input type="text" id="bookSubtitle" placeholder="Subtitle (optional)" />
       </div>
     </div>
 
     <div class="two-col">
       <div class="form-group">
+        <label for="bookAuthor">Author *</label>
+        <input type="text" id="bookAuthor" placeholder="Author name" required />
+      </div>
+
+      <div class="form-group">
         <label for="bookPublisher">Publisher</label>
         <input type="text" id="bookPublisher" placeholder="Publisher name" />
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="form-group">
+        <label for="bookPublishDate">Publish Date</label>
+        <input type="date" id="bookPublishDate" placeholder="YYYY-MM-DD" />
+        <div class="hint">Use calendar picker or type manually (YYYY-MM-DD)</div>
       </div>
 
       <div class="form-group">
@@ -292,13 +311,27 @@
     </div>
 
     <div class="form-group">
-      <label for="bookDescription">Description</label>
+      <label for="bookDescription">Book Description</label>
       <textarea id="bookDescription" placeholder="Book description (optional)"></textarea>
     </div>
 
     <div class="form-group">
-      <label for="bookISBN">ISBN (Optional)</label>
-      <input type="text" id="bookISBN" placeholder="978-XXXXXXXXXX" />
+      <label for="authorDescription">Author Description</label>
+      <textarea id="authorDescription" placeholder="About the author (optional)"></textarea>
+      <div class="hint">Will be appended to book description in the EPUB</div>
+    </div>
+
+    <div class="two-col">
+      <div class="form-group">
+        <label for="bookISBN">ISBN</label>
+        <input type="text" id="bookISBN" placeholder="978-XXXXXXXXXX" />
+      </div>
+
+      <div class="form-group">
+        <label for="bookTags">Tags</label>
+        <input type="text" id="bookTags" placeholder="Fiction, Mystery, Thriller" />
+        <div class="hint">Separate multiple tags with commas</div>
+      </div>
     </div>
   </div>
 
@@ -338,6 +371,7 @@
     const htmlFileInput = document.getElementById('htmlFile');
     const imageFolderInput = document.getElementById('imageFolder');
     const coverImageInput = document.getElementById('coverImage');
+    const metadataCSVInput = document.getElementById('metadataCSV');
     const htmlDropZone = document.getElementById('htmlDropZone');
     const imageFolderDropZone = document.getElementById('imageFolderDropZone');
     const coverDropZone = document.getElementById('coverDropZone');
@@ -454,20 +488,99 @@
       }
     });
 
+    // CSV metadata import
+    metadataCSVInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        try {
+          const csvText = await file.text();
+          const lines = csvText.split(/\r?\n/).filter(line => line.trim());
+
+          if (lines.length < 2) {
+            showStatus('CSV file must have a header row and at least one data row', 'error');
+            return;
+          }
+
+          // Parse header and first data row
+          const headers = parseCSVLine(lines[0]);
+          const values = parseCSVLine(lines[1]);
+
+          // Create a mapping object
+          const csvData = {};
+          headers.forEach((header, index) => {
+            csvData[header.trim()] = values[index] ? values[index].trim() : '';
+          });
+
+          // Map CSV fields to form fields
+          if (csvData.book_title) document.getElementById('bookTitle').value = csvData.book_title;
+          if (csvData.author_name) document.getElementById('bookAuthor').value = csvData.author_name;
+          if (csvData.publisher) document.getElementById('bookPublisher').value = csvData.publisher;
+          if (csvData.publish_date) document.getElementById('bookPublishDate').value = csvData.publish_date;
+          if (csvData.language) document.getElementById('bookLanguage').value = csvData.language;
+          if (csvData.book_description) document.getElementById('bookDescription').value = csvData.book_description;
+          if (csvData.author_description) document.getElementById('authorDescription').value = csvData.author_description;
+          if (csvData.isbn) document.getElementById('bookISBN').value = csvData.isbn;
+          if (csvData.tags) document.getElementById('bookTags').value = csvData.tags;
+
+          showStatus('Metadata imported from CSV successfully', 'success');
+        } catch (error) {
+          showStatus('Error parsing CSV file: ' + error.message, 'error');
+        }
+      }
+    });
+
+    // Helper function to parse a CSV line (handles quoted fields)
+    function parseCSVLine(line) {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const nextChar = line[i + 1];
+
+        if (char === '"') {
+          if (inQuotes && nextChar === '"') {
+            // Escaped quote
+            current += '"';
+            i++;
+          } else {
+            // Toggle quote mode
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          // Field separator
+          result.push(current);
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+
+      // Add the last field
+      result.push(current);
+      return result;
+    }
+
     // Reset button
     resetBtn.addEventListener('click', () => {
       htmlFileInput.value = '';
       imageFolderInput.value = '';
       coverImageInput.value = '';
+      metadataCSVInput.value = '';
       htmlDropZone.classList.remove('has-file');
       imageFolderDropZone.classList.remove('has-file');
       coverDropZone.classList.remove('has-file');
       document.getElementById('bookTitle').value = '';
+      document.getElementById('bookSubtitle').value = '';
       document.getElementById('bookAuthor').value = '';
       document.getElementById('bookPublisher').value = '';
+      document.getElementById('bookPublishDate').value = '';
       document.getElementById('bookLanguage').value = 'zh';
       document.getElementById('bookDescription').value = '';
+      document.getElementById('authorDescription').value = '';
       document.getElementById('bookISBN').value = '';
+      document.getElementById('bookTags').value = '';
       htmlContent = null;
       imageFiles = {};
       coverImageFile = null;
@@ -514,13 +627,48 @@
       const doc = parser.parseFromString(htmlContent, 'text/html');
 
       // Extract metadata
+      const bookDescription = document.getElementById('bookDescription').value.trim();
+      const authorDescription = document.getElementById('authorDescription').value.trim();
+      const publishDate = document.getElementById('bookPublishDate').value.trim();
+      const isbn = document.getElementById('bookISBN').value.trim();
+      const tagsInput = document.getElementById('bookTags').value.trim();
+
+      // Validate publish date format if provided
+      if (publishDate && !/^\d{4}-\d{2}-\d{2}$/.test(publishDate)) {
+        showStatus('Invalid publish date format. Please use YYYY-MM-DD', 'error');
+        return;
+      }
+
+      // Validate ISBN format if provided (basic check)
+      if (isbn) {
+        const cleanIsbn = isbn.replace(/[-\s]/g, '');
+        const isValidIsbn10 = /^\d{9}[\dX]$/.test(cleanIsbn);
+        const isValidIsbn13 = /^(978|979)\d{10}$/.test(cleanIsbn);
+        if (!isValidIsbn10 && !isValidIsbn13) {
+          showStatus('Invalid ISBN format. Please enter a valid 10 or 13 digit ISBN', 'error');
+          return;
+        }
+      }
+
+      // Combine book description and author description
+      let combinedDescription = bookDescription;
+      if (authorDescription) {
+        combinedDescription += (bookDescription ? '\n\n#####\n\n' : '') + authorDescription;
+      }
+
+      // Parse tags into array
+      const tags = tagsInput ? tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag) : [];
+
       const metadata = {
         title: document.getElementById('bookTitle').value.trim(),
+        subtitle: document.getElementById('bookSubtitle').value.trim(),
         author: document.getElementById('bookAuthor').value.trim(),
         publisher: document.getElementById('bookPublisher').value.trim(),
+        publishDate: publishDate,
         language: document.getElementById('bookLanguage').value.trim() || 'zh',
-        description: document.getElementById('bookDescription').value.trim(),
-        isbn: document.getElementById('bookISBN').value.trim(),
+        description: combinedDescription,
+        isbn: isbn,
+        tags: tags,
         uuid: generateUUID()
       };
 
@@ -5167,12 +5315,29 @@ ${navItems}  </ol>
         spineItems += `    <itemref idref="chapter${i+1}"/>\n`;
       });
 
+      // Build tags metadata
+      let tagsMetadata = '';
+      if (metadata.tags && metadata.tags.length > 0) {
+        metadata.tags.forEach(tag => {
+          tagsMetadata += `<dc:subject>${escapeXML(tag)}</dc:subject>\n    `;
+        });
+      }
+
+      // Build subtitle metadata (EPUB 3 structured)
+      let subtitleMetadata = '';
+      if (metadata.subtitle) {
+        subtitleMetadata = `<dc:title id="subtitle">${escapeXML(metadata.subtitle)}</dc:title>
+    <meta refines="#subtitle" property="title-type">subtitle</meta>
+    <meta refines="#main-title" property="title-type">main</meta>
+    `;
+      }
+
       return `<?xml version="1.0" encoding="utf-8"?>
 <package version="3.0" unique-identifier="BookId" xmlns="http://www.idpf.org/2007/opf">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:title>${escapeXML(metadata.title)}</dc:title>
-    <dc:creator>${escapeXML(metadata.author)}</dc:creator>
-    ${metadata.publisher ? `<dc:publisher>${escapeXML(metadata.publisher)}</dc:publisher>\n    ` : ''}${metadata.description ? `<dc:description>${escapeXML(metadata.description)}</dc:description>\n    ` : ''}<dc:language>${metadata.language}</dc:language>
+    <dc:title id="main-title">${escapeXML(metadata.title)}</dc:title>
+    ${subtitleMetadata}<dc:creator>${escapeXML(metadata.author)}</dc:creator>
+    ${metadata.publisher ? `<dc:publisher>${escapeXML(metadata.publisher)}</dc:publisher>\n    ` : ''}${metadata.publishDate ? `<dc:date>${metadata.publishDate}</dc:date>\n    ` : ''}${metadata.description ? `<dc:description>${escapeXML(metadata.description)}</dc:description>\n    ` : ''}${tagsMetadata}<dc:language>${metadata.language}</dc:language>
     ${metadata.isbn ? `<dc:identifier>urn:isbn:${metadata.isbn}</dc:identifier>\n    ` : ''}<dc:identifier id="BookId">urn:uuid:${metadata.uuid}</dc:identifier>
     <meta property="dcterms:modified">${now}</meta>
     ${coverImageFile ? '<meta name="cover" content="cover-image"/>\n    ' : ''}</metadata>
