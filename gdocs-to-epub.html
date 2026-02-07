@@ -892,17 +892,7 @@
       };
 
       // InDesign HTML has a simpler structure - just p and img tags
-      // First collect all images (both standalone and inside paragraphs)
-      const allImages = body.querySelectorAll('img');
-      allImages.forEach((img) => {
-        content.images.push({
-          src: img.getAttribute('src'),
-          alt: img.getAttribute('alt') || '',
-          index: content.images.length
-        });
-      });
-
-      // Then collect paragraphs (excluding images that are direct children of body)
+      // Process elements and collect both paragraphs and images
       const elements = Array.from(body.children);
       elements.forEach((el) => {
         if (el.tagName === 'P') {
@@ -910,12 +900,28 @@
           const text = el.textContent.trim();
           if (text || el.querySelector('img')) {
             content.paragraphs.push(el);
+
+            // Collect images that are inside this paragraph
+            const imgs = el.querySelectorAll('img');
+            imgs.forEach((img) => {
+              content.images.push({
+                src: img.getAttribute('src'),
+                alt: img.getAttribute('alt') || '',
+                index: content.images.length
+              });
+            });
           }
-        } else if (el.tagName !== 'IMG') {
-          // Include other elements that aren't standalone images
-          if (el.textContent.trim()) {
-            content.paragraphs.push(el);
-          }
+        } else if (el.tagName === 'IMG') {
+          // Standalone images - add them as paragraphs AND to images array
+          content.paragraphs.push(el);
+          content.images.push({
+            src: el.getAttribute('src'),
+            alt: el.getAttribute('alt') || '',
+            index: content.images.length
+          });
+        } else if (el.textContent.trim()) {
+          // Include other non-empty elements
+          content.paragraphs.push(el);
         }
       });
 
@@ -1477,6 +1483,14 @@ ${bodyContent}
           }
         });
         return items ? { html: `<ol>\n${items}</ol>`, isFootnote: false } : null;
+      } else if (tagName === 'IMG') {
+        // Handle standalone images (from InDesign HTML)
+        const src = el.getAttribute('src');
+        const imgObj = images.find(i => i.originalSrc === src);
+        if (imgObj) {
+          return { html: `<p><img class="fit" alt="" src="../Images/${imgObj.filename}"/></p>`, isFootnote: false };
+        }
+        return null;
       }
 
       return null;
