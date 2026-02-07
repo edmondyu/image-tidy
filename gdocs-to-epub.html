@@ -511,7 +511,7 @@
       }];
     }
 
-    // Process images
+    // Process and compress images
     async function processImages(imageRefs) {
       const processed = [];
 
@@ -522,20 +522,112 @@
         let imageFile = imageFiles[originalFilename];
 
         if (imageFile) {
-          const arrayBuffer = await imageFile.arrayBuffer();
-          const extension = imageFile.name.split('.').pop().toLowerCase();
-          const newFilename = `image-${String(i + 1).padStart(3, '0')}.${extension}`;
+          // Load and compress the image
+          const compressedBlob = await compressImage(imageFile);
+          const arrayBuffer = await compressedBlob.arrayBuffer();
+
+          // Always output as JPG after compression
+          const newFilename = `image-${String(i + 1).padStart(3, '0')}.jpg`;
 
           processed.push({
             filename: newFilename,
             data: arrayBuffer,
-            mediaType: extension === 'png' ? 'image/png' : 'image/jpeg',
+            mediaType: 'image/jpeg',
             originalSrc: imgRef.src
           });
         }
       }
 
       return processed;
+    }
+
+    // Compress a single image file
+    async function compressImage(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+
+        img.onload = async () => {
+          URL.revokeObjectURL(url);
+
+          // Create canvas for resizing/compression
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+
+          // Resize if needed (max 1800x1800)
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1800;
+
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          // Draw image
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Initial conversion to JPG
+          const resizedBlob = await canvasToBlob(canvas, 'image/jpeg', 0.85);
+
+          // Compress iteratively
+          const compressedBlob = await compressImageFromCanvas(canvas, resizedBlob, 50);
+
+          resolve(compressedBlob);
+        };
+
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error('Failed to load image'));
+        };
+
+        img.src = url;
+      });
+    }
+
+    // Compress image from canvas
+    async function compressImageFromCanvas(canvas, resizedBlob, targetPercent) {
+      const originalSize = resizedBlob.size;
+      const targetRatio = targetPercent / 100;
+      const targetSize = originalSize * targetRatio;
+      let quality = 0.8;
+      let compressedBlob = resizedBlob;
+
+      while (true) {
+        const blob = await canvasToBlob(canvas, 'image/jpeg', quality);
+        const size = blob.size;
+        if (size <= targetSize || quality <= 0.1) {
+          compressedBlob = blob;
+          break;
+        }
+        quality -= 0.05;
+      }
+
+      return compressedBlob;
+    }
+
+    // Helper: Convert canvas to blob
+    function canvasToBlob(canvas, type, quality) {
+      return new Promise((resolve, reject) => {
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Canvas to blob failed'));
+          },
+          type,
+          quality
+        );
+      });
     }
 
     // Create EPUB structure
@@ -631,6 +723,25 @@ ${bodyContent}
       } else if (tagName === 'H3') {
         return `<h3>${escapeXML(el.textContent.trim())}</h3>`;
       } else if (tagName === 'P') {
+        // Check for footnote definition (Google Docs format)
+        const footnoteLink = el.querySelector('a[href^="#ftnt_ref"]');
+        if (footnoteLink && footnoteLink.id && footnoteLink.id.match(/^ftnt\d+$/)) {
+          const num = footnoteLink.id.replace('ftnt', '');
+          const displayNum = footnoteLink.textContent.replace(/[\[\]]/g, '');
+
+          // Get the content after the footnote number
+          let content = el.innerHTML;
+          // Remove the footnote link from content
+          content = content.replace(/<a[^>]+href="#ftnt_ref\d+"[^>]*>\[\d+\]<\/a>/, '');
+          content = cleanTextContent({ innerHTML: content });
+
+          // Convert to EPUB footnote format
+          return `<dl class="footnote" id="note_${num}">
+  <dt>[<a href="#back_note_${num}" title="${displayNum}">←${displayNum}</a>]</dt>
+  <dd><p>${content}</p></dd>
+</dl>`;
+        }
+
         // Check for images
         const img = el.querySelector('img');
         if (img) {
@@ -679,8 +790,17 @@ ${bodyContent}
       html = html.replace(/style="[^"]*"/g, '');
       html = html.replace(/id="[^"]*"/g, '');
 
+      // Convert Google Docs footnote references to EPUB format
+      html = html.replace(/<sup>\s*<a[^>]+href="#ftnt(\d+)"[^>]+id="ftnt_ref\d+"[^>]*>\[(\d+)\]<\/a>\s*<\/sup>/gi, (match, num, displayNum) => {
+        return `<sup><a class="noteref" href="#note_${num}" id="back_note_${num}" role="doc-noteref" title="${displayNum}">${displayNum}</a></sup>`;
+      });
+
       // Convert Google Docs links to clean links
       html = html.replace(/<a\s+[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gi, (match, href, text) => {
+        // Skip if already processed as footnote
+        if (href.startsWith('#note_') || href.startsWith('#back_note_')) {
+          return match;
+        }
         // Clean Google redirect URLs
         if (href.includes('www.google.com/url?q=')) {
           const urlMatch = href.match(/[?&]q=([^&]+)/);
@@ -706,14 +826,40 @@ ${bodyContent}
 
     // Convert common HTML entities to numeric entities for XHTML
     function convertHTMLEntitiesToNumeric(html) {
-      // First, create a temporary DOM element to decode HTML entities
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = html;
+      // First, replace common HTML named entities with numeric equivalents
+      // This must be done BEFORE any DOM manipulation
+      const entityMap = {
+        '&nbsp;': '&#160;',
+        '&ldquo;': '&#8220;',
+        '&rdquo;': '&#8221;',
+        '&lsquo;': '&#8216;',
+        '&rsquo;': '&#8217;',
+        '&mdash;': '&#8212;',
+        '&ndash;': '&#8211;',
+        '&hellip;': '&#8230;',
+        '&bull;': '&#8226;',
+        '&middot;': '&#183;',
+        '&copy;': '&#169;',
+        '&reg;': '&#174;',
+        '&trade;': '&#8482;',
+        '&euro;': '&#8364;',
+        '&pound;': '&#163;',
+        '&yen;': '&#165;',
+        '&cent;': '&#162;',
+        '&sect;': '&#167;',
+        '&para;': '&#182;',
+        '&deg;': '&#176;',
+        '&plusmn;': '&#177;',
+        '&times;': '&#215;',
+        '&divide;': '&#247;'
+      };
 
-      // Get the decoded text (this converts &nbsp; to actual non-breaking space)
-      let decoded = tempDiv.innerHTML;
+      // Replace named entities
+      for (const [entity, numeric] of Object.entries(entityMap)) {
+        html = html.split(entity).join(numeric);
+      }
 
-      // Now replace special characters with numeric entities
+      // Now also handle Unicode characters that might be in the text
       const charMap = {
         '\u00A0': '&#160;',  // non-breaking space
         '\u201C': '&#8220;', // left double quote
@@ -722,23 +868,15 @@ ${bodyContent}
         '\u2019': '&#8217;', // right single quote
         '\u2014': '&#8212;', // em dash
         '\u2013': '&#8211;', // en dash
-        '\u2026': '&#8230;', // ellipsis
-        '\u2022': '&#8226;', // bullet
-        '\u00B7': '&#183;',  // middle dot
-        '\u00A9': '&#169;',  // copyright
-        '\u00AE': '&#174;',  // registered
-        '\u2122': '&#8482;', // trademark
-        '\u20AC': '&#8364;', // euro
-        '\u00A3': '&#163;',  // pound
-        '\u00A5': '&#165;'   // yen
+        '\u2026': '&#8230;'  // ellipsis
       };
 
-      // Replace each character
+      // Replace Unicode characters
       for (const [char, numeric] of Object.entries(charMap)) {
-        decoded = decoded.split(char).join(numeric);
+        html = html.split(char).join(numeric);
       }
 
-      return decoded;
+      return html;
     }
 
     // Generate book CSS
