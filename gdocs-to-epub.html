@@ -268,6 +268,7 @@
       <label for="metadataCSV">Import Metadata from CSV (Optional)</label>
       <input type="file" id="metadataCSV" accept=".csv" />
       <div class="hint">Upload a CSV file to auto-fill metadata fields. Only the first data row will be used.</div>
+      <button type="button" class="secondary" id="downloadSampleCSV" style="margin-top: 0.5rem;">Download Sample CSV</button>
     </div>
 
     <div class="two-col">
@@ -381,6 +382,14 @@
     const progressBar = document.getElementById('progressBar');
     const status = document.getElementById('status');
 
+    // Prevent default drag behaviors on document level
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      document.body.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }, false);
+    });
+
     // Drag and drop utilities
     function preventDefaults(e) {
       e.preventDefault();
@@ -395,28 +404,29 @@
       dropZone.classList.remove('drag-over');
     }
 
-    // Setup drag and drop for HTML file
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-      htmlDropZone.addEventListener(eventName, preventDefaults, false);
-      imageFolderDropZone.addEventListener(eventName, preventDefaults, false);
-      coverDropZone.addEventListener(eventName, preventDefaults, false);
-    });
+    // Setup drag and drop event handlers
+    function setupDropZone(dropZone, onDrop) {
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+      });
 
-    ['dragenter', 'dragover'].forEach(eventName => {
-      htmlDropZone.addEventListener(eventName, () => highlight(htmlDropZone), false);
-      imageFolderDropZone.addEventListener(eventName, () => highlight(imageFolderDropZone), false);
-      coverDropZone.addEventListener(eventName, () => highlight(coverDropZone), false);
-    });
+      dropZone.addEventListener('dragenter', () => highlight(dropZone), false);
+      dropZone.addEventListener('dragover', () => highlight(dropZone), false);
+      dropZone.addEventListener('dragleave', (e) => {
+        // Only unhighlight if leaving the drop zone itself, not a child element
+        if (e.target === dropZone) {
+          unhighlight(dropZone);
+        }
+      }, false);
+      dropZone.addEventListener('drop', (e) => {
+        unhighlight(dropZone);
+        onDrop(e);
+      }, false);
+    }
 
-    ['dragleave', 'drop'].forEach(eventName => {
-      htmlDropZone.addEventListener(eventName, () => unhighlight(htmlDropZone), false);
-      imageFolderDropZone.addEventListener(eventName, () => unhighlight(imageFolderDropZone), false);
-      coverDropZone.addEventListener(eventName, () => unhighlight(coverDropZone), false);
-    });
+    // Setup each drop zone with its handler
 
-    htmlDropZone.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    setupDropZone(htmlDropZone, async (e) => {
       const files = e.dataTransfer.files;
       if (files.length > 0) {
         const file = files[0];
@@ -428,11 +438,9 @@
           showStatus('Please drop an HTML file', 'error');
         }
       }
-    }, false);
+    });
 
-    imageFolderDropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    setupDropZone(imageFolderDropZone, (e) => {
       const files = Array.from(e.dataTransfer.files);
       const imageFilesList = files.filter(file => file.type.startsWith('image/'));
       if (imageFilesList.length > 0) {
@@ -445,11 +453,9 @@
       } else {
         showStatus('Please drop image files', 'error');
       }
-    }, false);
+    });
 
-    coverDropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    setupDropZone(coverDropZone, (e) => {
       const files = e.dataTransfer.files;
       if (files.length > 0) {
         const file = files[0];
@@ -461,7 +467,7 @@
           showStatus('Please drop an image file', 'error');
         }
       }
-    }, false);
+    });
 
     // File inputs
     htmlFileInput.addEventListener('change', async (e) => {
@@ -534,6 +540,20 @@
           showStatus('Error parsing CSV file: ' + error.message, 'error');
         }
       }
+    });
+
+    // Download sample CSV button
+    document.getElementById('downloadSampleCSV').addEventListener('click', () => {
+      const sampleCSV = `book_title,book_subtitle,author_name,publisher,publish_date,language,book_description,author_description,isbn,tags
+"Sample Book Title","An Amazing Subtitle","John Doe","Sample Publisher","2024-01-15","en","This is a sample book description that explains what the book is about.","John Doe is an award-winning author with over 20 years of experience.","978-1234567890","Fiction,Mystery,Thriller"`;
+
+      const blob = new Blob([sampleCSV], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'metadata_sample.csv';
+      link.click();
+      URL.revokeObjectURL(link.href);
+      showStatus('Sample CSV downloaded', 'success');
     });
 
     // Helper function to parse a CSV line (handles quoted fields)
