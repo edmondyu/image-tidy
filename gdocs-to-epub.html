@@ -11,25 +11,27 @@
       max-width: 1200px;
       margin: 0 auto;
       padding: 1.5rem;
-      background: #f5f5f5;
-      color: #111827;
+      background: #131313;
+      color: #f9f9f9;
     }
-    h1 {
+    h1, h2 {
       margin-top: 0;
       margin-bottom: 0.25rem;
+      color: #50e3c2;
     }
     .subtitle {
       margin-top: 0;
       margin-bottom: 1.5rem;
-      color: #6b7280;
+      color: #9ca3af;
       font-size: 0.95rem;
     }
     .card {
-      background: #fff;
+      background: #1f1f1f;
       border-radius: 10px;
       padding: 1.5rem;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       margin-bottom: 1.5rem;
+      border: 1px solid #2a2a2a;
     }
     .form-group {
       margin-bottom: 1.25rem;
@@ -39,17 +41,21 @@
       font-weight: 600;
       margin-bottom: 0.5rem;
       font-size: 0.9rem;
+      color: #50e3c2;
     }
     input[type="text"],
     input[type="file"],
+    select,
     textarea {
       width: 100%;
       padding: 0.6rem;
-      border: 1px solid #d1d5db;
+      border: 1px solid #3a3a3a;
       border-radius: 6px;
       font-size: 0.95rem;
       font-family: inherit;
       box-sizing: border-box;
+      background: #2a2a2a;
+      color: #f9f9f9;
     }
     textarea {
       min-height: 80px;
@@ -68,19 +74,26 @@
       margin-top: 0.5rem;
     }
     button.primary {
-      background: #2563eb;
-      color: #fff;
+      background: #50e3c2;
+      color: #131313;
+      font-weight: 600;
+    }
+    button.primary:hover {
+      background: #3dd4b3;
     }
     button.secondary {
-      background: #e5e7eb;
-      color: #111827;
+      background: #3a3a3a;
+      color: #f9f9f9;
+    }
+    button.secondary:hover {
+      background: #4a4a4a;
     }
     button:disabled {
       opacity: 0.6;
       cursor: not-allowed;
     }
     .progress {
-      background: #e5e7eb;
+      background: #2a2a2a;
       border-radius: 8px;
       height: 32px;
       overflow: hidden;
@@ -88,13 +101,13 @@
       display: none;
     }
     .progress-bar {
-      background: #2563eb;
+      background: #50e3c2;
       height: 100%;
       transition: width 0.3s;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
+      color: #131313;
       font-size: 0.85rem;
       font-weight: 600;
     }
@@ -106,20 +119,23 @@
       display: none;
     }
     .status.info {
-      background: #dbeafe;
-      color: #1e40af;
+      background: #1e3a5f;
+      color: #93c5fd;
+      border: 1px solid #2563eb;
     }
     .status.success {
-      background: #d1fae5;
-      color: #065f46;
+      background: #064e3b;
+      color: #6ee7b7;
+      border: 1px solid #10b981;
     }
     .status.error {
-      background: #fee2e2;
-      color: #991b1b;
+      background: #7f1d1d;
+      color: #fca5a5;
+      border: 1px solid #dc2626;
     }
     .hint {
       font-size: 0.85rem;
-      color: #6b7280;
+      color: #9ca3af;
       margin-top: 0.25rem;
     }
     .two-col {
@@ -134,12 +150,60 @@
     }
     .back-link {
       display: inline-block;
-      color: #2563eb;
+      color: #50e3c2;
       text-decoration: none;
       margin-bottom: 1rem;
     }
     .back-link:hover {
       text-decoration: underline;
+    }
+    .drop-zone {
+      position: relative;
+      border: 2px dashed #3a3a3a;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      transition: all 0.3s;
+      background: #2a2a2a;
+      margin-bottom: 1rem;
+    }
+    .drop-zone.drag-over {
+      border-color: #50e3c2;
+      background: #1a3a35;
+    }
+    .drop-zone p {
+      margin: 0.5rem 0;
+      color: #9ca3af;
+    }
+    .drop-zone .drop-icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      color: #50e3c2;
+    }
+    .drop-zone input[type="file"] {
+      display: none;
+    }
+    .drop-zone .file-input-wrapper {
+      margin-top: 1rem;
+    }
+    .drop-zone .browse-btn {
+      background: #3a3a3a;
+      color: #f9f9f9;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-block;
+      font-size: 0.9rem;
+    }
+    .drop-zone .browse-btn:hover {
+      background: #4a4a4a;
+    }
+    .drop-zone.has-file {
+      border-color: #10b981;
+      background: #064e3b;
+    }
+    .drop-zone.has-file .drop-icon {
+      color: #10b981;
     }
   </style>
 </head>
@@ -156,19 +220,43 @@
 
     <div class="form-group">
       <label for="htmlFile">Google Docs HTML File</label>
-      <input type="file" id="htmlFile" accept=".html,.htm" />
+      <div class="drop-zone" id="htmlDropZone">
+        <div class="drop-icon">📄</div>
+        <p><strong>Drag and drop HTML file here</strong></p>
+        <p>or</p>
+        <div class="file-input-wrapper">
+          <label for="htmlFile" class="browse-btn">Browse Files</label>
+          <input type="file" id="htmlFile" accept=".html,.htm" />
+        </div>
+      </div>
       <div class="hint">Export your Google Doc as "Web Page (.html, zipped)" and upload the HTML file</div>
     </div>
 
     <div class="form-group">
       <label for="imageFolder">Images Folder</label>
-      <input type="file" id="imageFolder" webkitdirectory directory multiple />
-      <div class="hint">Select the "images" folder that came with the HTML export</div>
+      <div class="drop-zone" id="imageFolderDropZone">
+        <div class="drop-icon">🖼️</div>
+        <p><strong>Drag and drop image files here</strong></p>
+        <p>or</p>
+        <div class="file-input-wrapper">
+          <label for="imageFolder" class="browse-btn">Browse Folder</label>
+          <input type="file" id="imageFolder" webkitdirectory directory multiple />
+        </div>
+      </div>
+      <div class="hint">Select the "images" folder that came with the HTML export (folder selection not supported for drag-and-drop, but you can drag multiple image files)</div>
     </div>
 
     <div class="form-group">
       <label for="coverImage">Cover Image (Optional)</label>
-      <input type="file" id="coverImage" accept="image/*" />
+      <div class="drop-zone" id="coverDropZone">
+        <div class="drop-icon">🎨</div>
+        <p><strong>Drag and drop cover image here</strong></p>
+        <p>or</p>
+        <div class="file-input-wrapper">
+          <label for="coverImage" class="browse-btn">Browse Files</label>
+          <input type="file" id="coverImage" accept="image/*" />
+        </div>
+      </div>
       <div class="hint">Upload a cover image for your EPUB (recommended size: 600x800 or similar)</div>
     </div>
   </div>
@@ -250,17 +338,97 @@
     const htmlFileInput = document.getElementById('htmlFile');
     const imageFolderInput = document.getElementById('imageFolder');
     const coverImageInput = document.getElementById('coverImage');
+    const htmlDropZone = document.getElementById('htmlDropZone');
+    const imageFolderDropZone = document.getElementById('imageFolderDropZone');
+    const coverDropZone = document.getElementById('coverDropZone');
     const convertBtn = document.getElementById('convertBtn');
     const resetBtn = document.getElementById('resetBtn');
     const progress = document.getElementById('progress');
     const progressBar = document.getElementById('progressBar');
     const status = document.getElementById('status');
 
+    // Drag and drop utilities
+    function preventDefaults(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    function highlight(dropZone) {
+      dropZone.classList.add('drag-over');
+    }
+
+    function unhighlight(dropZone) {
+      dropZone.classList.remove('drag-over');
+    }
+
+    // Setup drag and drop for HTML file
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      htmlDropZone.addEventListener(eventName, preventDefaults, false);
+      imageFolderDropZone.addEventListener(eventName, preventDefaults, false);
+      coverDropZone.addEventListener(eventName, preventDefaults, false);
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      htmlDropZone.addEventListener(eventName, () => highlight(htmlDropZone), false);
+      imageFolderDropZone.addEventListener(eventName, () => highlight(imageFolderDropZone), false);
+      coverDropZone.addEventListener(eventName, () => highlight(coverDropZone), false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      htmlDropZone.addEventListener(eventName, () => unhighlight(htmlDropZone), false);
+      imageFolderDropZone.addEventListener(eventName, () => unhighlight(imageFolderDropZone), false);
+      coverDropZone.addEventListener(eventName, () => unhighlight(coverDropZone), false);
+    });
+
+    htmlDropZone.addEventListener('drop', async (e) => {
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        const file = files[0];
+        if (file.type === 'text/html' || file.name.endsWith('.html') || file.name.endsWith('.htm')) {
+          htmlContent = await file.text();
+          htmlDropZone.classList.add('has-file');
+          showStatus('HTML file loaded', 'success');
+        } else {
+          showStatus('Please drop an HTML file', 'error');
+        }
+      }
+    }, false);
+
+    imageFolderDropZone.addEventListener('drop', (e) => {
+      const files = Array.from(e.dataTransfer.files);
+      const imageFilesList = files.filter(file => file.type.startsWith('image/'));
+      if (imageFilesList.length > 0) {
+        imageFiles = {};
+        imageFilesList.forEach(file => {
+          imageFiles[file.name] = file;
+        });
+        imageFolderDropZone.classList.add('has-file');
+        showStatus(`${imageFilesList.length} images loaded`, 'success');
+      } else {
+        showStatus('Please drop image files', 'error');
+      }
+    }, false);
+
+    coverDropZone.addEventListener('drop', (e) => {
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        const file = files[0];
+        if (file.type.startsWith('image/')) {
+          coverImageFile = file;
+          coverDropZone.classList.add('has-file');
+          showStatus('Cover image loaded', 'success');
+        } else {
+          showStatus('Please drop an image file', 'error');
+        }
+      }
+    }, false);
+
     // File inputs
     htmlFileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (file) {
         htmlContent = await file.text();
+        htmlDropZone.classList.add('has-file');
         showStatus('HTML file loaded', 'success');
       }
     });
@@ -273,6 +441,7 @@
         const filename = file.name;
         imageFiles[filename] = file;
       });
+      imageFolderDropZone.classList.add('has-file');
       showStatus(`${files.length} images loaded`, 'success');
     });
 
@@ -280,6 +449,7 @@
       const file = e.target.files[0];
       if (file) {
         coverImageFile = file;
+        coverDropZone.classList.add('has-file');
         showStatus('Cover image loaded', 'success');
       }
     });
@@ -289,6 +459,9 @@
       htmlFileInput.value = '';
       imageFolderInput.value = '';
       coverImageInput.value = '';
+      htmlDropZone.classList.remove('has-file');
+      imageFolderDropZone.classList.remove('has-file');
+      coverDropZone.classList.remove('has-file');
       document.getElementById('bookTitle').value = '';
       document.getElementById('bookAuthor').value = '';
       document.getElementById('bookPublisher').value = '';
