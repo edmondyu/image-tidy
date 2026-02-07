@@ -230,16 +230,34 @@
 <body>
   <a href="index.html" class="back-link">← Back to Toolbox</a>
 
-  <h1>Google Docs to EPUB Converter</h1>
+  <h1>HTML to EPUB Converter</h1>
   <p class="subtitle">
-    Convert HTML exported from Google Docs to EPUB format with predefined styling
+    Convert HTML exported from Google Docs or InDesign to EPUB format with predefined styling
   </p>
+
+  <div class="card">
+    <h2>Source Format</h2>
+    <div class="form-group">
+      <label>Select HTML Source</label>
+      <div style="display: flex; gap: 1.5rem; margin-top: 0.5rem;">
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+          <input type="radio" name="sourceFormat" value="googledocs" checked />
+          <span>Google Docs</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+          <input type="radio" name="sourceFormat" value="indesign" />
+          <span>InDesign</span>
+        </label>
+      </div>
+      <div class="hint">Choose the application that was used to export the HTML file</div>
+    </div>
+  </div>
 
   <div class="card">
     <h2>Step 1: Upload Files</h2>
 
     <div class="form-group">
-      <label for="htmlFile">Google Docs HTML File</label>
+      <label for="htmlFile">HTML File</label>
       <div class="drop-zone" id="htmlDropZone">
         <div class="drop-icon">📄</div>
         <p><strong>Drag and drop HTML file here</strong></p>
@@ -249,7 +267,7 @@
           <input type="file" id="htmlFile" accept=".html,.htm" />
         </div>
       </div>
-      <div class="hint">Export your Google Doc as "Web Page (.html, zipped)" and upload the HTML file</div>
+      <div class="hint">For Google Docs: Export as "Web Page (.html, zipped)". For InDesign: Export as HTML.</div>
     </div>
 
     <div class="form-group">
@@ -263,7 +281,7 @@
           <input type="file" id="imageFolder" webkitdirectory directory multiple />
         </div>
       </div>
-      <div class="hint">Select the "images" folder that came with the HTML export (folder selection not supported for drag-and-drop, but you can drag multiple image files)</div>
+      <div class="hint">Select the image folder from the HTML export (Google Docs: "images" folder; InDesign: web-resources/image folder). Folder selection not supported for drag-and-drop, but you can drag multiple image files.</div>
     </div>
 
     <div class="form-group">
@@ -375,7 +393,7 @@
         <option value="h3">H3 Headings (Subsections)</option>
         <option value="none">Keep as Single File</option>
       </select>
-      <div class="hint">Choose how to split the document into separate XHTML chapter files</div>
+      <div class="hint">Choose how to split the document into separate XHTML chapter files. Note: InDesign HTML doesn't use heading tags, so it will be kept as a single file regardless of this setting.</div>
     </div>
   </div>
 
@@ -777,8 +795,11 @@
 
       showProgress('Extracting content...', 20);
 
-      // Extract and clean content
-      const content = extractContent(doc);
+      // Get selected source format
+      const sourceFormat = document.querySelector('input[name="sourceFormat"]:checked').value;
+
+      // Extract and clean content based on source format
+      const content = sourceFormat === 'indesign' ? extractContentInDesign(doc) : extractContent(doc);
 
       showProgress('Splitting chapters...', 30);
 
@@ -853,6 +874,48 @@
             index: content.images.length
           };
           content.images.push(img);
+        }
+      });
+
+      return content;
+    }
+
+    // Extract content from InDesign HTML
+    function extractContentInDesign(doc) {
+      const body = doc.body;
+      const content = {
+        title: '',
+        paragraphs: [],
+        headings: [],
+        images: [],
+        links: []
+      };
+
+      // InDesign HTML has a simpler structure - just p and img tags
+      // First collect all images (both standalone and inside paragraphs)
+      const allImages = body.querySelectorAll('img');
+      allImages.forEach((img) => {
+        content.images.push({
+          src: img.getAttribute('src'),
+          alt: img.getAttribute('alt') || '',
+          index: content.images.length
+        });
+      });
+
+      // Then collect paragraphs (excluding images that are direct children of body)
+      const elements = Array.from(body.children);
+      elements.forEach((el) => {
+        if (el.tagName === 'P') {
+          // Skip empty paragraphs (but keep those with images)
+          const text = el.textContent.trim();
+          if (text || el.querySelector('img')) {
+            content.paragraphs.push(el);
+          }
+        } else if (el.tagName !== 'IMG') {
+          // Include other elements that aren't standalone images
+          if (el.textContent.trim()) {
+            content.paragraphs.push(el);
+          }
         }
       });
 
