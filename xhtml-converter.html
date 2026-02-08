@@ -99,6 +99,54 @@
       padding: 0.1rem 0.3rem;
       border-radius: 4px;
     }
+    .drop-zone {
+      position: relative;
+      border: 2px dashed #3a3a3a;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      transition: all 0.3s;
+      background: #2a2a2a;
+      margin-bottom: 1rem;
+    }
+    .drop-zone.drag-over {
+      border-color: #50e3c2;
+      background: #1a3a35;
+    }
+    .drop-zone p {
+      margin: 0.5rem 0;
+      color: #9ca3af;
+    }
+    .drop-zone .drop-icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      color: #50e3c2;
+    }
+    .drop-zone input[type="file"] {
+      display: none;
+    }
+    .drop-zone .file-input-wrapper {
+      margin-top: 1rem;
+    }
+    .drop-zone .browse-btn {
+      background: #3a3a3a;
+      color: #f9f9f9;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-block;
+      font-size: 0.9rem;
+    }
+    .drop-zone .browse-btn:hover {
+      background: #4a4a4a;
+    }
+    .drop-zone.has-file {
+      border-color: #10b981;
+      background: #064e3b;
+    }
+    .drop-zone.has-file .drop-icon {
+      color: #10b981;
+    }
   </style>
   <!-- JSZip for ZIP creation -->
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
@@ -125,14 +173,30 @@
       CSV columns expected: <code>filename,type,alt,caption</code><br/>
       <code>filename</code> should match markers like <code>[image-01.jpg]</code> inside your .txt files.
     </p>
-    <input id="csv-input" type="file" accept=".csv,text/csv" />
+    <div class="drop-zone" id="csvDropZone">
+      <div class="drop-icon">📊</div>
+      <p><strong>Drag and drop CSV file here</strong></p>
+      <p>or</p>
+      <div class="file-input-wrapper">
+        <label for="csv-input" class="browse-btn">Browse Files</label>
+        <input id="csv-input" type="file" accept=".csv,text/csv" />
+      </div>
+    </div>
     <p class="summary" id="csv-summary"></p>
   </div>
 
   <div class="card">
     <h2>2. Upload text files</h2>
     <p>Upload one or more UTF-8 <strong>.txt</strong> chapter files.</p>
-    <input id="txt-input" type="file" multiple accept=".txt,text/plain" />
+    <div class="drop-zone" id="txtDropZone">
+      <div class="drop-icon">📑</div>
+      <p><strong>Drag and drop text files here</strong></p>
+      <p>or</p>
+      <div class="file-input-wrapper">
+        <label for="txt-input" class="browse-btn">Browse Files</label>
+        <input id="txt-input" type="file" multiple accept=".txt,text/plain" />
+      </div>
+    </div>
     <p class="summary" id="txt-summary"></p>
   </div>
 
@@ -150,8 +214,10 @@
 
   <script>
     const csvInput          = document.getElementById("csv-input");
+    const csvDropZone       = document.getElementById("csvDropZone");
     const skipCsvEl         = document.getElementById("skip-csv");
     const txtInput          = document.getElementById("txt-input");
+    const txtDropZone       = document.getElementById("txtDropZone");
     const convertBtn        = document.getElementById("convert-btn");
     const clearBtn          = document.getElementById("clear-btn");
     const csvSummaryEl      = document.getElementById("csv-summary");
@@ -166,6 +232,38 @@
     function log(msg) {
       logEl.textContent += msg + "\n";
       logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    // Drag and drop helper functions
+    function preventDefaults(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    function highlight(dropZone) {
+      dropZone.classList.add('drag-over');
+    }
+
+    function unhighlight(dropZone) {
+      dropZone.classList.remove('drag-over');
+    }
+
+    function setupDropZone(dropZone, onDrop) {
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+      });
+
+      dropZone.addEventListener('dragenter', () => highlight(dropZone), false);
+      dropZone.addEventListener('dragover', () => highlight(dropZone), false);
+      dropZone.addEventListener('dragleave', (e) => {
+        if (e.target === dropZone) {
+          unhighlight(dropZone);
+        }
+      }, false);
+      dropZone.addEventListener('drop', (e) => {
+        unhighlight(dropZone);
+        onDrop(e);
+      }, false);
     }
 
     function escapeHtml(str) {
@@ -202,10 +300,15 @@ skipCsvEl.addEventListener("change", () => {
 
   if (skipCsv) {
     csvInput.disabled = true;
+    csvDropZone.style.opacity = "0.5";
+    csvDropZone.style.pointerEvents = "none";
+    csvDropZone.classList.remove('has-file');
     csvSummaryEl.textContent = "Skipping CSV. All images will be treated as type 1; <img> alt text will be the image filename.";
     log("Skip CSV enabled. All images will be treated as type 1 and use filename as alt text.");
   } else {
     csvInput.disabled = false;
+    csvDropZone.style.opacity = "1";
+    csvDropZone.style.pointerEvents = "auto";
     log("Skip CSV disabled. Please upload an image db CSV.");
   }
 
@@ -213,20 +316,19 @@ skipCsvEl.addEventListener("change", () => {
 });
 
     // ---------- CSV handling ----------
-    csvInput.addEventListener("change", () => {
+    function handleCsvSelection(file) {
       if (skipCsv) {
-        // Safety: CSV input should be disabled when skipping, but guard anyway.
         log("Skip CSV is enabled — CSV upload is ignored.");
         return;
       }
 
-      const file = csvInput.files && csvInput.files[0];
       imageTypes = null;
       csvSummaryEl.textContent = "";
       logEl.textContent = "";
 
       if (!file) {
         log("No CSV file selected.");
+        csvDropZone.classList.remove('has-file');
         updateConvertButtonState();
         return;
       }
@@ -261,25 +363,46 @@ skipCsvEl.addEventListener("change", () => {
           imageTypes = dict;
           csvSummaryEl.textContent = `Loaded ${count} image record(s) from CSV.`;
           log(`Loaded ${count} image record(s) from CSV.`);
+          csvDropZone.classList.add('has-file');
           updateConvertButtonState();
         },
         error: (err) => {
           log("Error reading CSV: " + (err.message || err));
           imageTypes = null;
+          csvDropZone.classList.remove('has-file');
           updateConvertButtonState();
         }
       });
+    }
+
+    csvInput.addEventListener("change", () => {
+      const file = csvInput.files && csvInput.files[0];
+      handleCsvSelection(file);
+    });
+
+    setupDropZone(csvDropZone, (e) => {
+      if (skipCsv) return;
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        const file = files[0];
+        if (file.name.endsWith('.csv') || file.type === 'text/csv') {
+          const dataTransfer = new DataTransfer();
+          dataTransfer.items.add(file);
+          csvInput.files = dataTransfer.files;
+          handleCsvSelection(file);
+        }
+      }
     });
 
     // ---------- Text file handling ----------
-    txtInput.addEventListener("change", () => {
-      const files = Array.from(txtInput.files || []);
+    function handleTxtSelection(files) {
       selectedTxtFiles = files;
       txtSummaryEl.textContent = "";
       logEl.textContent = "";
 
       if (files.length === 0) {
         log("No text files selected.");
+        txtDropZone.classList.remove('has-file');
         updateConvertButtonState();
         return;
       }
@@ -287,14 +410,33 @@ skipCsvEl.addEventListener("change", () => {
       txtSummaryEl.textContent = `Selected ${files.length} text file(s).`;
       log(`Selected ${files.length} text file(s):`);
       files.forEach(f => log("  - " + f.name));
+      txtDropZone.classList.add('has-file');
 
       updateConvertButtonState();
+    }
+
+    txtInput.addEventListener("change", () => {
+      const files = Array.from(txtInput.files || []);
+      handleTxtSelection(files);
+    });
+
+    setupDropZone(txtDropZone, (e) => {
+      const files = Array.from(e.dataTransfer.files);
+      const txtFiles = files.filter(f => f.name.endsWith('.txt') || f.type === 'text/plain');
+      if (txtFiles.length > 0) {
+        const dataTransfer = new DataTransfer();
+        txtFiles.forEach(file => dataTransfer.items.add(file));
+        txtInput.files = dataTransfer.files;
+        handleTxtSelection(txtFiles);
+      }
     });
 
     clearBtn.addEventListener("click", () => {
       skipCsvEl.checked = false;
       skipCsv = false;
       csvInput.disabled = false;
+      csvDropZone.style.opacity = "1";
+      csvDropZone.style.pointerEvents = "auto";
       csvInput.value = "";
       txtInput.value = "";
       imageTypes = null;
@@ -303,6 +445,8 @@ skipCsvEl.addEventListener("change", () => {
       txtSummaryEl.textContent = "";
       convertSummaryEl.textContent = "";
       logEl.textContent = "";
+      csvDropZone.classList.remove('has-file');
+      txtDropZone.classList.remove('has-file');
       updateConvertButtonState();
     });
 

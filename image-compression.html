@@ -143,6 +143,54 @@
     a.back:hover {
       color: #3dd4b3;
     }
+    .drop-zone {
+      position: relative;
+      border: 2px dashed #3a3a3a;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      transition: all 0.3s;
+      background: #2a2a2a;
+      margin-bottom: 1rem;
+    }
+    .drop-zone.drag-over {
+      border-color: #50e3c2;
+      background: #1a3a35;
+    }
+    .drop-zone p {
+      margin: 0.5rem 0;
+      color: #9ca3af;
+    }
+    .drop-zone .drop-icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      color: #50e3c2;
+    }
+    .drop-zone input[type="file"] {
+      display: none;
+    }
+    .drop-zone .file-input-wrapper {
+      margin-top: 1rem;
+    }
+    .drop-zone .browse-btn {
+      background: #3a3a3a;
+      color: #f9f9f9;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-block;
+      font-size: 0.9rem;
+    }
+    .drop-zone .browse-btn:hover {
+      background: #4a4a4a;
+    }
+    .drop-zone.has-file {
+      border-color: #10b981;
+      background: #064e3b;
+    }
+    .drop-zone.has-file .drop-icon {
+      color: #10b981;
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
@@ -156,7 +204,15 @@
   <div class="card">
     <h2>1. Select Images & Parameters</h2>
     <p>Supported formats: <strong>.png, .jpg, .jpeg</strong></p>
-    <input id="img-file-input" type="file" multiple accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
+    <div class="drop-zone" id="imgDropZone">
+      <div class="drop-icon">🖼️</div>
+      <p><strong>Drag and drop images here</strong></p>
+      <p>or</p>
+      <div class="file-input-wrapper">
+        <label for="img-file-input" class="browse-btn">Browse Files</label>
+        <input id="img-file-input" type="file" multiple accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
+      </div>
+    </div>
 
     <div class="controls-row">
       <label for="max-width-input">Max width (px):</label>
@@ -207,6 +263,7 @@
 
   <script>
     const imgFileInput      = document.getElementById("img-file-input");
+    const imgDropZone       = document.getElementById("imgDropZone");
     const maxWidthInput     = document.getElementById("max-width-input");
     const maxHeightInput    = document.getElementById("max-height-input");
     const targetPercentInput= document.getElementById("target-percent-input");
@@ -222,6 +279,38 @@
 
     let selectedImgFiles = [];
     let processedImgResults = [];
+
+    // Drag and drop helper functions
+    function preventDefaults(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    function highlight(dropZone) {
+      dropZone.classList.add('drag-over');
+    }
+
+    function unhighlight(dropZone) {
+      dropZone.classList.remove('drag-over');
+    }
+
+    function setupDropZone(dropZone, onDrop) {
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+      });
+
+      dropZone.addEventListener('dragenter', () => highlight(dropZone), false);
+      dropZone.addEventListener('dragover', () => highlight(dropZone), false);
+      dropZone.addEventListener('dragleave', (e) => {
+        if (e.target === dropZone) {
+          unhighlight(dropZone);
+        }
+      }, false);
+      dropZone.addEventListener('drop', (e) => {
+        unhighlight(dropZone);
+        onDrop(e);
+      }, false);
+    }
 
     function imgLog(message) {
       imgLogEl.textContent += message + "\n";
@@ -289,6 +378,7 @@
       processImagesBtn.disabled = true;
       zipImagesBtn.disabled = true;
       imgLogEl.textContent = "";
+      imgDropZone.classList.remove('has-file');
     }
 
     function syncResizeControls() {
@@ -403,8 +493,7 @@
       return compressedBlob;
     }
 
-    imgFileInput.addEventListener("change", () => {
-      const files = Array.from(imgFileInput.files || []);
+    function handleFileSelection(files) {
       const filtered = files.filter(f => /\.(png|jpe?g)$/i.test(f.name));
       filtered.sort((a, b) => naturalCompare(a.name, b.name));
       selectedImgFiles = filtered;
@@ -419,9 +508,27 @@
       if (filtered.length === 0) {
         imgFileListEl.textContent = "No valid image files selected.";
         processImagesBtn.disabled = true;
+        imgDropZone.classList.remove('has-file');
       } else {
         updateImgFileList();
         imgLog(`Selected ${filtered.length} image(s).`);
+        imgDropZone.classList.add('has-file');
+      }
+    }
+
+    imgFileInput.addEventListener("change", () => {
+      const files = Array.from(imgFileInput.files || []);
+      handleFileSelection(files);
+    });
+
+    setupDropZone(imgDropZone, (e) => {
+      const files = Array.from(e.dataTransfer.files);
+      const imageFiles = files.filter(f => /\.(png|jpe?g)$/i.test(f.name));
+      if (imageFiles.length > 0) {
+        const dataTransfer = new DataTransfer();
+        imageFiles.forEach(file => dataTransfer.items.add(file));
+        imgFileInput.files = dataTransfer.files;
+        handleFileSelection(imageFiles);
       }
     });
 

@@ -99,6 +99,54 @@
       color: #f9f9f9;
       font-size: 0.9rem;
     }
+    .drop-zone {
+      position: relative;
+      border: 2px dashed #3a3a3a;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      transition: all 0.3s;
+      background: #2a2a2a;
+      margin-bottom: 1rem;
+    }
+    .drop-zone.drag-over {
+      border-color: #50e3c2;
+      background: #1a3a35;
+    }
+    .drop-zone p {
+      margin: 0.5rem 0;
+      color: #9ca3af;
+    }
+    .drop-zone .drop-icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      color: #50e3c2;
+    }
+    .drop-zone input[type="file"] {
+      display: none;
+    }
+    .drop-zone .file-input-wrapper {
+      margin-top: 1rem;
+    }
+    .drop-zone .browse-btn {
+      background: #3a3a3a;
+      color: #f9f9f9;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-block;
+      font-size: 0.9rem;
+    }
+    .drop-zone .browse-btn:hover {
+      background: #4a4a4a;
+    }
+    .drop-zone.has-file {
+      border-color: #10b981;
+      background: #064e3b;
+    }
+    .drop-zone.has-file .drop-icon {
+      color: #10b981;
+    }
   </style>
 
   <!-- PDF.js UMD build (global pdfjsLib) -->
@@ -114,9 +162,17 @@
 
   <div class="card">
     <h2>1. Select PDF</h2>
-    <input id="pdf-file-input" type="file" accept="application/pdf,.pdf" />
+    <div class="drop-zone" id="pdfDropZone">
+      <div class="drop-icon">📕</div>
+      <p><strong>Drag and drop PDF file here</strong></p>
+      <p>or</p>
+      <div class="file-input-wrapper">
+        <label for="pdf-file-input" class="browse-btn">Browse Files</label>
+        <input id="pdf-file-input" type="file" accept="application/pdf,.pdf" />
+      </div>
+    </div>
     <div class="hint">
-      If your PDF is scanned images, this tool won’t read text (no OCR).
+      If your PDF is scanned images, this tool won't read text (no OCR).
     </div>
   </div>
 
@@ -190,6 +246,7 @@
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js";
 
     const pdfFileInput = document.getElementById("pdf-file-input");
+    const pdfDropZone = document.getElementById("pdfDropZone");
     const extractBtn = document.getElementById("extract-btn");
     const downloadBtn = document.getElementById("download-btn");
     const clearBtn = document.getElementById("clear-btn");
@@ -212,6 +269,38 @@
     function log(msg) {
       logEl.textContent += msg + "\n";
       logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    // Drag and drop helper functions
+    function preventDefaults(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    function highlight(dropZone) {
+      dropZone.classList.add('drag-over');
+    }
+
+    function unhighlight(dropZone) {
+      dropZone.classList.remove('drag-over');
+    }
+
+    function setupDropZone(dropZone, onDrop) {
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+      });
+
+      dropZone.addEventListener('dragenter', () => highlight(dropZone), false);
+      dropZone.addEventListener('dragover', () => highlight(dropZone), false);
+      dropZone.addEventListener('dragleave', (e) => {
+        if (e.target === dropZone) {
+          unhighlight(dropZone);
+        }
+      }, false);
+      dropZone.addEventListener('drop', (e) => {
+        unhighlight(dropZone);
+        onDrop(e);
+      }, false);
     }
 
     function resetOutputs() {
@@ -252,19 +341,39 @@
     optApproach.addEventListener("change", updateApproachUI);
     updateApproachUI();
 
-    pdfFileInput.addEventListener("change", () => {
+    function handleFileSelection(file) {
       resetOutputs();
       logEl.textContent = "";
-      selectedFile = (pdfFileInput.files && pdfFileInput.files[0]) ? pdfFileInput.files[0] : null;
+      selectedFile = file || null;
 
       if (!selectedFile) {
         extractBtn.disabled = true;
+        pdfDropZone.classList.remove('has-file');
         log("No PDF selected.");
         return;
       }
 
       extractBtn.disabled = false;
+      pdfDropZone.classList.add('has-file');
       log("Selected: " + selectedFile.name + " (" + Math.round(selectedFile.size/1024) + " KB)");
+    }
+
+    pdfFileInput.addEventListener("change", () => {
+      const file = (pdfFileInput.files && pdfFileInput.files[0]) ? pdfFileInput.files[0] : null;
+      handleFileSelection(file);
+    });
+
+    setupDropZone(pdfDropZone, (e) => {
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        const file = files[0];
+        if (file.name.endsWith('.pdf') || file.type === 'application/pdf') {
+          const dataTransfer = new DataTransfer();
+          dataTransfer.items.add(file);
+          pdfFileInput.files = dataTransfer.files;
+          handleFileSelection(file);
+        }
+      }
     });
 
     clearBtn.addEventListener("click", () => {
@@ -272,6 +381,7 @@
       pdfFileInput.value = "";
       extractBtn.disabled = true;
       logEl.textContent = "";
+      pdfDropZone.classList.remove('has-file');
       resetOutputs();
     });
 

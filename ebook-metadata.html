@@ -151,6 +151,54 @@
       overflow-x: auto;
       margin-top: 1rem;
     }
+    .drop-zone {
+      position: relative;
+      border: 2px dashed #3a3a3a;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      transition: all 0.3s;
+      background: #2a2a2a;
+      margin-bottom: 1rem;
+    }
+    .drop-zone.drag-over {
+      border-color: #50e3c2;
+      background: #1a3a35;
+    }
+    .drop-zone p {
+      margin: 0.5rem 0;
+      color: #9ca3af;
+    }
+    .drop-zone .drop-icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      color: #50e3c2;
+    }
+    .drop-zone input[type="file"] {
+      display: none;
+    }
+    .drop-zone .file-input-wrapper {
+      margin-top: 1rem;
+    }
+    .drop-zone .browse-btn {
+      background: #3a3a3a;
+      color: #f9f9f9;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-block;
+      font-size: 0.9rem;
+    }
+    .drop-zone .browse-btn:hover {
+      background: #4a4a4a;
+    }
+    .drop-zone.has-file {
+      border-color: #10b981;
+      background: #064e3b;
+    }
+    .drop-zone.has-file .drop-icon {
+      color: #10b981;
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
@@ -164,7 +212,15 @@
   <div class="card">
     <h2>1. Select Ebook Files</h2>
     <p>Supported formats: <strong>.epub, .pdf</strong></p>
-    <input id="file-input" type="file" multiple accept=".epub,.pdf,application/epub+zip,application/pdf" />
+    <div class="drop-zone" id="ebookDropZone">
+      <div class="drop-icon">📕</div>
+      <p><strong>Drag and drop ebook files here</strong></p>
+      <p>or</p>
+      <div class="file-input-wrapper">
+        <label for="file-input" class="browse-btn">Browse Files</label>
+        <input id="file-input" type="file" multiple accept=".epub,.pdf,application/epub+zip,application/pdf" />
+      </div>
+    </div>
     <p class="hint">
       Extracts: Title, Author, Publisher, Date, Language, ISBN/Identifier, Subject, Description, Tags, Comments.
     </p>
@@ -192,6 +248,7 @@
       "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.mjs";
 
     const fileInput = document.getElementById("file-input");
+    const ebookDropZone = document.getElementById("ebookDropZone");
     const extractBtn = document.getElementById("extract-btn");
     const downloadCsvBtn = document.getElementById("download-csv-btn");
     const clearBtn = document.getElementById("clear-btn");
@@ -221,6 +278,38 @@
     function log(msg) {
       logEl.textContent += msg + "\n";
       logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    // Drag and drop helper functions
+    function preventDefaults(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    function highlight(dropZone) {
+      dropZone.classList.add('drag-over');
+    }
+
+    function unhighlight(dropZone) {
+      dropZone.classList.remove('drag-over');
+    }
+
+    function setupDropZone(dropZone, onDrop) {
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+      });
+
+      dropZone.addEventListener('dragenter', () => highlight(dropZone), false);
+      dropZone.addEventListener('dragover', () => highlight(dropZone), false);
+      dropZone.addEventListener('dragleave', (e) => {
+        if (e.target === dropZone) {
+          unhighlight(dropZone);
+        }
+      }, false);
+      dropZone.addEventListener('drop', (e) => {
+        unhighlight(dropZone);
+        onDrop(e);
+      }, false);
     }
 
     function bytesToKB(bytes) {
@@ -285,6 +374,7 @@
       extractBtn.disabled = true;
       downloadCsvBtn.disabled = true;
       logEl.textContent = "";
+      ebookDropZone.classList.remove('has-file');
     }
 
     function escapeXml(str) {
@@ -543,8 +633,7 @@
       previewEl.appendChild(table);
     }
 
-    fileInput.addEventListener("change", () => {
-      const files = Array.from(fileInput.files || []);
+    function handleFileSelection(files) {
       const filtered = files.filter(f => /\.(epub|pdf)$/i.test(f.name));
       filtered.sort((a, b) => naturalCompare(a.name, b.name));
       selectedFiles = filtered;
@@ -560,11 +649,33 @@
       if (filtered.length === 0) {
         fileListEl.textContent = "No valid ebook files selected.";
         extractBtn.disabled = true;
+        ebookDropZone.classList.remove('has-file');
       } else {
         updateFileList();
         const epubCount = filtered.filter(f => /\.epub$/i.test(f.name)).length;
         const pdfCount = filtered.length - epubCount;
         log(`Selected ${filtered.length} file(s): ${epubCount} EPUB, ${pdfCount} PDF.`);
+        ebookDropZone.classList.add('has-file');
+      }
+    }
+
+    fileInput.addEventListener("change", () => {
+      const files = Array.from(fileInput.files || []);
+      handleFileSelection(files);
+    });
+
+    setupDropZone(ebookDropZone, (e) => {
+      const files = Array.from(e.dataTransfer.files);
+      const ebookFiles = files.filter(f =>
+        /\.(epub|pdf)$/i.test(f.name) ||
+        f.type === 'application/epub+zip' ||
+        f.type === 'application/pdf'
+      );
+      if (ebookFiles.length > 0) {
+        const dataTransfer = new DataTransfer();
+        ebookFiles.forEach(file => dataTransfer.items.add(file));
+        fileInput.files = dataTransfer.files;
+        handleFileSelection(ebookFiles);
       }
     });
 

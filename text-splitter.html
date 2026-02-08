@@ -98,6 +98,54 @@
       padding: 0.1rem 0.3rem;
       border-radius: 4px;
     }
+    .drop-zone {
+      position: relative;
+      border: 2px dashed #3a3a3a;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      transition: all 0.3s;
+      background: #2a2a2a;
+      margin-bottom: 1rem;
+    }
+    .drop-zone.drag-over {
+      border-color: #50e3c2;
+      background: #1a3a35;
+    }
+    .drop-zone p {
+      margin: 0.5rem 0;
+      color: #9ca3af;
+    }
+    .drop-zone .drop-icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      color: #50e3c2;
+    }
+    .drop-zone input[type="file"] {
+      display: none;
+    }
+    .drop-zone .file-input-wrapper {
+      margin-top: 1rem;
+    }
+    .drop-zone .browse-btn {
+      background: #3a3a3a;
+      color: #f9f9f9;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-block;
+      font-size: 0.9rem;
+    }
+    .drop-zone .browse-btn:hover {
+      background: #4a4a4a;
+    }
+    .drop-zone.has-file {
+      border-color: #10b981;
+      background: #064e3b;
+    }
+    .drop-zone.has-file .drop-icon {
+      color: #10b981;
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
@@ -112,7 +160,15 @@
   <div class="card">
     <h2>1. Select Text File</h2>
     <p>Supported formats: <strong>.txt</strong> (UTF-8)</p>
-    <input id="split-file-input" type="file" accept=".txt,text/plain" />
+    <div class="drop-zone" id="splitDropZone">
+      <div class="drop-icon">📑</div>
+      <p><strong>Drag and drop text file here</strong></p>
+      <p>or</p>
+      <div class="file-input-wrapper">
+        <label for="split-file-input" class="browse-btn">Browse Files</label>
+        <input id="split-file-input" type="file" accept=".txt,text/plain" />
+      </div>
+    </div>
     <p class="hint">
       Expected markers inside the text:
       <code>[ch1]</code>, <code>[ch2]</code>, ..., and <code>[break]</code> for segment breaks.
@@ -133,6 +189,7 @@
 
   <script>
     const splitFileInput   = document.getElementById("split-file-input");
+    const splitDropZone    = document.getElementById("splitDropZone");
     const splitProcessBtn  = document.getElementById("split-process-btn");
     const splitClearBtn    = document.getElementById("split-clear-btn");
     const splitLogEl       = document.getElementById("split-log");
@@ -145,20 +202,71 @@
       splitLogEl.scrollTop = splitLogEl.scrollHeight;
     }
 
-    splitFileInput.addEventListener("change", () => {
-      const file = splitFileInput.files && splitFileInput.files[0];
+    // Drag and drop helper functions
+    function preventDefaults(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    function highlight(dropZone) {
+      dropZone.classList.add('drag-over');
+    }
+
+    function unhighlight(dropZone) {
+      dropZone.classList.remove('drag-over');
+    }
+
+    function setupDropZone(dropZone, onDrop) {
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+      });
+
+      dropZone.addEventListener('dragenter', () => highlight(dropZone), false);
+      dropZone.addEventListener('dragover', () => highlight(dropZone), false);
+      dropZone.addEventListener('dragleave', (e) => {
+        if (e.target === dropZone) {
+          unhighlight(dropZone);
+        }
+      }, false);
+      dropZone.addEventListener('drop', (e) => {
+        unhighlight(dropZone);
+        onDrop(e);
+      }, false);
+    }
+
+    function handleFileSelection(file) {
       selectedSplitFile = file || null;
       splitSummaryEl.textContent = "";
       splitLogEl.textContent = "";
 
       if (!file) {
         splitProcessBtn.disabled = true;
+        splitDropZone.classList.remove('has-file');
         splitLog("No text file selected.");
         return;
       }
 
       splitProcessBtn.disabled = false;
+      splitDropZone.classList.add('has-file');
       splitLog(`Selected text file: ${file.name}`);
+    }
+
+    splitFileInput.addEventListener("change", () => {
+      const file = splitFileInput.files && splitFileInput.files[0];
+      handleFileSelection(file);
+    });
+
+    setupDropZone(splitDropZone, (e) => {
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        const file = files[0];
+        if (file.name.endsWith('.txt') || file.type === 'text/plain') {
+          const dataTransfer = new DataTransfer();
+          dataTransfer.items.add(file);
+          splitFileInput.files = dataTransfer.files;
+          handleFileSelection(file);
+        }
+      }
     });
 
     splitClearBtn.addEventListener("click", () => {
@@ -167,6 +275,7 @@
       splitSummaryEl.textContent = "";
       splitLogEl.textContent = "";
       splitProcessBtn.disabled = true;
+      splitDropZone.classList.remove('has-file');
     });
 
     function readFileAsText(file) {

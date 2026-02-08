@@ -101,6 +101,54 @@
       color: #50e3c2;
     }
     a.back:hover { color: #3dd4b3; }
+    .drop-zone {
+      position: relative;
+      border: 2px dashed #3a3a3a;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      transition: all 0.3s;
+      background: #2a2a2a;
+      margin-bottom: 1rem;
+    }
+    .drop-zone.drag-over {
+      border-color: #50e3c2;
+      background: #1a3a35;
+    }
+    .drop-zone p {
+      margin: 0.5rem 0;
+      color: #9ca3af;
+    }
+    .drop-zone .drop-icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      color: #50e3c2;
+    }
+    .drop-zone input[type="file"] {
+      display: none;
+    }
+    .drop-zone .file-input-wrapper {
+      margin-top: 1rem;
+    }
+    .drop-zone .browse-btn {
+      background: #3a3a3a;
+      color: #f9f9f9;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-block;
+      font-size: 0.9rem;
+    }
+    .drop-zone .browse-btn:hover {
+      background: #4a4a4a;
+    }
+    .drop-zone.has-file {
+      border-color: #10b981;
+      background: #064e3b;
+    }
+    .drop-zone.has-file .drop-icon {
+      color: #10b981;
+    }
 
     /* on-screen warning box */
     .warning {
@@ -129,8 +177,16 @@
 
 <div class="card">
   <h2>1. Select HTML/XHTML Files & Tags to Preserve</h2>
-  <input id="html-file-input" type="file" multiple
-         accept=".html,.htm,.xhtml,text/html,application/xhtml+xml" />
+  <div class="drop-zone" id="htmlDropZone">
+    <div class="drop-icon">📄</div>
+    <p><strong>Drag and drop HTML/XHTML files here</strong></p>
+    <p>or</p>
+    <div class="file-input-wrapper">
+      <label for="html-file-input" class="browse-btn">Browse Files</label>
+      <input id="html-file-input" type="file" multiple
+             accept=".html,.htm,.xhtml,text/html,application/xhtml+xml" />
+    </div>
+  </div>
 
   <div id="html-file-list" class="file-list">No files selected.</div>
 
@@ -197,6 +253,7 @@
 
 <script>
 const htmlFileInput = document.getElementById("html-file-input");
+const htmlDropZone = document.getElementById("htmlDropZone");
 const processHtmlBtn = document.getElementById("process-html-btn");
 const clearHtmlBtn = document.getElementById("clear-html-btn");
 const htmlZipBtn = document.getElementById("html-zip-btn");
@@ -214,6 +271,38 @@ const s2tToggle = document.getElementById("s2t-toggle");
 let selectedHtmlFiles = [];
 let generatedOutputs = [];
 let mergedTextContent = "";
+
+// Drag and drop helper functions
+function preventDefaults(e) {
+  e.preventDefault();
+  e.stopPropagation();
+}
+
+function highlight(dropZone) {
+  dropZone.classList.add('drag-over');
+}
+
+function unhighlight(dropZone) {
+  dropZone.classList.remove('drag-over');
+}
+
+function setupDropZone(dropZone, onDrop) {
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, preventDefaults, false);
+  });
+
+  dropZone.addEventListener('dragenter', () => highlight(dropZone), false);
+  dropZone.addEventListener('dragover', () => highlight(dropZone), false);
+  dropZone.addEventListener('dragleave', (e) => {
+    if (e.target === dropZone) {
+      unhighlight(dropZone);
+    }
+  }, false);
+  dropZone.addEventListener('drop', (e) => {
+    unhighlight(dropZone);
+    onDrop(e);
+  }, false);
+}
 
 function log(msg) {
   htmlLogEl.textContent += msg + "\n";
@@ -236,13 +325,39 @@ function appendWarning(msg) {
   else htmlWarningEl.textContent += "\n\n" + msg;
 }
 
-htmlFileInput.addEventListener("change", () => {
-  selectedHtmlFiles = Array.from(htmlFileInput.files || []);
+function handleFileSelection(files) {
+  selectedHtmlFiles = files;
   htmlFileListEl.textContent =
     selectedHtmlFiles.length === 0
       ? "No files selected."
       : selectedHtmlFiles.map(f => f.name).join(", ");
   processHtmlBtn.disabled = selectedHtmlFiles.length === 0;
+  if (selectedHtmlFiles.length > 0) {
+    htmlDropZone.classList.add('has-file');
+  } else {
+    htmlDropZone.classList.remove('has-file');
+  }
+}
+
+htmlFileInput.addEventListener("change", () => {
+  handleFileSelection(Array.from(htmlFileInput.files || []));
+});
+
+setupDropZone(htmlDropZone, (e) => {
+  const files = Array.from(e.dataTransfer.files);
+  const htmlFiles = files.filter(f =>
+    f.name.endsWith('.html') ||
+    f.name.endsWith('.htm') ||
+    f.name.endsWith('.xhtml') ||
+    f.type === 'text/html' ||
+    f.type === 'application/xhtml+xml'
+  );
+  if (htmlFiles.length > 0) {
+    const dataTransfer = new DataTransfer();
+    htmlFiles.forEach(file => dataTransfer.items.add(file));
+    htmlFileInput.files = dataTransfer.files;
+    handleFileSelection(htmlFiles);
+  }
 });
 
 clearHtmlBtn.addEventListener("click", () => {
@@ -256,6 +371,7 @@ clearHtmlBtn.addEventListener("click", () => {
   htmlLogEl.textContent = "";
   processHtmlBtn.disabled = true;
   htmlZipBtn.disabled = true;
+  htmlDropZone.classList.remove('has-file');
 
   // NEW: clear warning
   setWarning("");

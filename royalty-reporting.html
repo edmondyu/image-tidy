@@ -163,6 +163,54 @@
       font-size: 0.9rem;
       line-height: 1.5;
     }
+    .drop-zone {
+      position: relative;
+      border: 2px dashed #3a3a3a;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      transition: all 0.3s;
+      background: #2a2a2a;
+      margin-top: 0.5rem;
+    }
+    .drop-zone.drag-over {
+      border-color: #50e3c2;
+      background: #1a3a35;
+    }
+    .drop-zone p {
+      margin: 0.5rem 0;
+      color: #9ca3af;
+    }
+    .drop-zone .drop-icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      color: #50e3c2;
+    }
+    .drop-zone input[type="file"] {
+      display: none;
+    }
+    .drop-zone .file-input-wrapper {
+      margin-top: 1rem;
+    }
+    .drop-zone .browse-btn {
+      background: #3a3a3a;
+      color: #f9f9f9;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-block;
+      font-size: 0.9rem;
+    }
+    .drop-zone .browse-btn:hover {
+      background: #4a4a4a;
+    }
+    .drop-zone.has-file {
+      border-color: #10b981;
+      background: #064e3b;
+    }
+    .drop-zone.has-file .drop-icon {
+      color: #10b981;
+    }
   </style>
 </head>
 <body>
@@ -185,7 +233,15 @@
       <input id="dateString" type="text" value="2024-10-01_to_2025-06-30" />
 
       <label>Upload source reports (multiple files allowed)</label>
-      <input id="fileInput" type="file" multiple accept=".csv,.xlsx" />
+      <div class="drop-zone" id="reportDropZone">
+        <div class="drop-icon">📊</div>
+        <p><strong>Drag and drop CSV/XLSX files here</strong></p>
+        <p>or</p>
+        <div class="file-input-wrapper">
+          <label for="fileInput" class="browse-btn">Browse Files</label>
+          <input id="fileInput" type="file" multiple accept=".csv,.xlsx" />
+        </div>
+      </div>
 
       <div class="row">
         <button id="processBtn" disabled>Process</button>
@@ -234,6 +290,7 @@
     const PLATFORMS = ['Google', 'kobo', 'koboplus', 'readmoo', 'KDP', 'hyread'];
 
     const fileInput = document.getElementById('fileInput');
+    const reportDropZone = document.getElementById('reportDropZone');
     const processBtn = document.getElementById('processBtn');
     const downloadBtn = document.getElementById('downloadBtn');
     const logEl = document.getElementById('log');
@@ -259,12 +316,69 @@
       lastZipBlobUrl = null;
     }
 
-    fileInput.addEventListener('change', () => {
-      const files = [...(fileInput.files || [])];
+    // Drag and drop helper functions
+    function preventDefaults(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    function highlight(dropZone) {
+      dropZone.classList.add('drag-over');
+    }
+
+    function unhighlight(dropZone) {
+      dropZone.classList.remove('drag-over');
+    }
+
+    function setupDropZone(dropZone, onDrop) {
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+      });
+
+      dropZone.addEventListener('dragenter', () => highlight(dropZone), false);
+      dropZone.addEventListener('dragover', () => highlight(dropZone), false);
+      dropZone.addEventListener('dragleave', (e) => {
+        if (e.target === dropZone) {
+          unhighlight(dropZone);
+        }
+      }, false);
+      dropZone.addEventListener('drop', (e) => {
+        unhighlight(dropZone);
+        onDrop(e);
+      }, false);
+    }
+
+    function handleFileSelection(files) {
       processBtn.disabled = files.length === 0;
       resetDownload();
       logEl.textContent = '';
       setStatus(files.length ? `${files.length} file(s) selected` : 'Idle');
+      if (files.length > 0) {
+        reportDropZone.classList.add('has-file');
+      } else {
+        reportDropZone.classList.remove('has-file');
+      }
+    }
+
+    fileInput.addEventListener('change', () => {
+      const files = [...(fileInput.files || [])];
+      handleFileSelection(files);
+    });
+
+    setupDropZone(reportDropZone, (e) => {
+      const files = Array.from(e.dataTransfer.files);
+      const reportFiles = files.filter(f =>
+        f.name.endsWith('.csv') ||
+        f.name.endsWith('.xlsx') ||
+        f.type === 'text/csv' ||
+        f.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      if (reportFiles.length > 0) {
+        const dataTransfer = new DataTransfer();
+        reportFiles.forEach(file => dataTransfer.items.add(file));
+        fileInput.files = dataTransfer.files;
+        handleFileSelection(reportFiles);
+      }
     });
 
     function detectPlatform(filename) {
