@@ -241,8 +241,12 @@
         <input type="checkbox" id="convertToJpg" checked />
         Convert output to JPG
       </label>
+      <label style="cursor: pointer;">
+        <input type="checkbox" id="skipCover" />
+        Skip cover image
+      </label>
     </div>
-    <div class="hint">Images larger than max dimensions will be resized proportionally (if enabled). Quality affects JPG compression. Converting to JPG reduces file size.</div>
+    <div class="hint">Images larger than max dimensions will be resized proportionally (if enabled). Quality affects JPG compression. Converting to JPG reduces file size. Skip cover image preserves the original cover quality.</div>
 
     <button class="primary" id="compressBtn" disabled>Compress EPUB Images</button>
 
@@ -269,6 +273,7 @@
     const maxHeightInput = document.getElementById('maxHeight');
     const enableResizeCheckbox = document.getElementById('enableResize');
     const convertToJpgCheckbox = document.getElementById('convertToJpg');
+    const skipCoverCheckbox = document.getElementById('skipCover');
 
     let epubFile = null;
     let statusTimeout;
@@ -379,11 +384,24 @@
       compressBtn.disabled = true;
       showProgress('Loading EPUB...', 10);
 
+      let coverImagePath = null;
+      let skipCover = false;
+
       try {
         const zip = new JSZip();
         const epubData = await zip.loadAsync(epubFile);
 
         showProgress('Finding images...', 20);
+
+        // Find the cover image path if skipCover is checked
+        skipCover = skipCoverCheckbox.checked;
+
+        if (skipCover) {
+          coverImagePath = await findCoverImage(epubData);
+          if (coverImagePath) {
+            console.log('Cover image identified:', coverImagePath);
+          }
+        }
 
         // Find all image files
         const imageFiles = [];
@@ -393,6 +411,11 @@
           if (!file.dir) {
             const ext = relativePath.toLowerCase().substring(relativePath.lastIndexOf('.'));
             if (imageExtensions.includes(ext)) {
+              // Skip cover image if option is checked and this is the cover
+              if (skipCover && coverImagePath && relativePath === coverImagePath) {
+                console.log('Skipping cover image:', relativePath);
+                return;
+              }
               imageFiles.push({ path: relativePath, file: file });
             }
           }
@@ -459,7 +482,8 @@
         link.click();
         URL.revokeObjectURL(link.href);
 
-        showStatus(`Successfully compressed ${imageFiles.length} images!`, 'success');
+        const coverSkippedMsg = (skipCover && coverImagePath) ? ' (cover image skipped)' : '';
+        showStatus(`Successfully compressed ${imageFiles.length} images!${coverSkippedMsg}`, 'success');
         setTimeout(hideProgress, 2000);
 
       } catch (error) {
@@ -470,6 +494,82 @@
         compressBtn.disabled = false;
       }
     });
+
+    async function findCoverImage(epubData) {
+      try {
+        // Find the OPF file path from container.xml
+        const containerFile = epubData.file('META-INF/container.xml');
+        if (!containerFile) {
+          console.warn('container.xml not found');
+          return null;
+        }
+
+        const containerXml = await containerFile.async('text');
+        const containerDoc = new DOMParser().parseFromString(containerXml, 'text/xml');
+        const rootfile = containerDoc.querySelector('rootfile');
+        if (!rootfile) {
+          console.warn('rootfile not found in container.xml');
+          return null;
+        }
+
+        const opfPath = rootfile.getAttribute('full-path');
+        const opfFile = epubData.file(opfPath);
+        if (!opfFile) {
+          console.warn('OPF file not found:', opfPath);
+          return null;
+        }
+
+        const opfXml = await opfFile.async('text');
+        const opfDoc = new DOMParser().parseFromString(opfXml, 'text/xml');
+
+        // Get the OPF directory for resolving relative paths
+        const opfDir = opfPath.substring(0, opfPath.lastIndexOf('/') + 1);
+
+        // Method 1: Look for item with properties="cover-image"
+        let coverItem = opfDoc.querySelector('item[properties~="cover-image"]');
+        if (coverItem) {
+          const href = coverItem.getAttribute('href');
+          return opfDir + href;
+        }
+
+        // Method 2: Look for meta tag with name="cover"
+        const coverMeta = opfDoc.querySelector('meta[name="cover"]');
+        if (coverMeta) {
+          const coverId = coverMeta.getAttribute('content');
+          coverItem = opfDoc.querySelector(`item[id="${coverId}"]`);
+          if (coverItem) {
+            const href = coverItem.getAttribute('href');
+            return opfDir + href;
+          }
+        }
+
+        // Method 3: Look for guide reference type="cover"
+        const coverGuide = opfDoc.querySelector('reference[type="cover"]');
+        if (coverGuide) {
+          const href = coverGuide.getAttribute('href');
+          // Guide might reference an HTML file, extract image from it
+          const htmlPath = opfDir + href.split('#')[0];
+          const htmlFile = epubData.file(htmlPath);
+          if (htmlFile) {
+            const htmlContent = await htmlFile.async('text');
+            const htmlDoc = new DOMParser().parseFromString(htmlContent, 'text/html');
+            const img = htmlDoc.querySelector('img');
+            if (img) {
+              const imgSrc = img.getAttribute('src');
+              const imgDir = htmlPath.substring(0, htmlPath.lastIndexOf('/') + 1);
+              return imgDir + imgSrc;
+            }
+          }
+        }
+
+        console.warn('Cover image not found using standard methods');
+        return null;
+
+      } catch (error) {
+        console.error('Error finding cover image:', error);
+        return null;
+      }
+    }
 
     async function compressImage(blob, maxWidth, maxHeight, quality, enableResize, convertToJpg) {
       return new Promise((resolve, reject) => {
