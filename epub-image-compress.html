@@ -232,7 +232,17 @@
         <input type="number" id="quality" value="85" min="1" max="100" />
       </div>
     </div>
-    <div class="hint">Images larger than these dimensions will be resized proportionally. Quality affects JPG compression.</div>
+    <div class="controls-row">
+      <label style="cursor: pointer;">
+        <input type="checkbox" id="enableResize" checked />
+        Enable resize (fit within max width/height)
+      </label>
+      <label style="cursor: pointer;">
+        <input type="checkbox" id="convertToJpg" checked />
+        Convert output to JPG
+      </label>
+    </div>
+    <div class="hint">Images larger than max dimensions will be resized proportionally (if enabled). Quality affects JPG compression. Converting to JPG reduces file size.</div>
 
     <button class="primary" id="compressBtn" disabled>Compress EPUB Images</button>
 
@@ -255,9 +265,23 @@
     const progress = document.getElementById('progress');
     const progressText = document.getElementById('progressText');
     const progressFill = document.getElementById('progressFill');
+    const maxWidthInput = document.getElementById('maxWidth');
+    const maxHeightInput = document.getElementById('maxHeight');
+    const enableResizeCheckbox = document.getElementById('enableResize');
+    const convertToJpgCheckbox = document.getElementById('convertToJpg');
 
     let epubFile = null;
     let statusTimeout;
+
+    // Sync resize controls
+    function syncResizeControls() {
+      const enabled = enableResizeCheckbox.checked;
+      maxWidthInput.disabled = !enabled;
+      maxHeightInput.disabled = !enabled;
+    }
+
+    enableResizeCheckbox.addEventListener('change', syncResizeControls);
+    syncResizeControls();
 
     // Drag and drop handlers
     function preventDefaults(e) {
@@ -387,15 +411,28 @@
         const maxWidth = parseInt(document.getElementById('maxWidth').value);
         const maxHeight = parseInt(document.getElementById('maxHeight').value);
         const quality = parseInt(document.getElementById('quality').value) / 100;
+        const enableResize = enableResizeCheckbox.checked;
+        const convertToJpg = convertToJpgCheckbox.checked;
 
         // Compress each image
         let processedCount = 0;
         for (const imageFile of imageFiles) {
           const imageData = await imageFile.file.async('blob');
-          const compressedBlob = await compressImage(imageData, maxWidth, maxHeight, quality);
 
-          // Replace the image in the zip
-          zip.file(imageFile.path, compressedBlob);
+          // Determine output filename (change extension if converting to JPG)
+          let outputPath = imageFile.path;
+          if (convertToJpg && !imageFile.path.toLowerCase().endsWith('.jpg') && !imageFile.path.toLowerCase().endsWith('.jpeg')) {
+            outputPath = imageFile.path.substring(0, imageFile.path.lastIndexOf('.')) + '.jpg';
+          }
+
+          const compressedBlob = await compressImage(imageData, maxWidth, maxHeight, quality, enableResize, convertToJpg);
+
+          // Replace the image in the zip (with new path if converted to JPG)
+          if (outputPath !== imageFile.path) {
+            // Remove old file and add new one
+            zip.remove(imageFile.path);
+          }
+          zip.file(outputPath, compressedBlob);
 
           processedCount++;
           const percent = 30 + (processedCount / imageFiles.length) * 60;
@@ -434,7 +471,7 @@
       }
     });
 
-    async function compressImage(blob, maxWidth, maxHeight, quality) {
+    async function compressImage(blob, maxWidth, maxHeight, quality, enableResize, convertToJpg) {
       return new Promise((resolve, reject) => {
         const img = new Image();
         const url = URL.createObjectURL(blob);
@@ -449,7 +486,7 @@
           let width = img.width;
           let height = img.height;
 
-          if (width > maxWidth || height > maxHeight) {
+          if (enableResize && (width > maxWidth || height > maxHeight)) {
             const ratio = Math.min(maxWidth / width, maxHeight / height);
             width = Math.round(width * ratio);
             height = Math.round(height * ratio);
@@ -459,14 +496,18 @@
           canvas.height = height;
           ctx.drawImage(img, 0, 0, width, height);
 
-          // Convert to JPG
+          // Determine output format
+          const outputType = convertToJpg ? 'image/jpeg' : (blob.type || 'image/jpeg');
+          const outputQuality = convertToJpg ? quality : 1.0;
+
+          // Convert to specified format
           canvas.toBlob((compressedBlob) => {
             if (compressedBlob) {
               resolve(compressedBlob);
             } else {
               reject(new Error('Failed to compress image'));
             }
-          }, 'image/jpeg', quality);
+          }, outputType, outputQuality);
         };
 
         img.onerror = () => {
