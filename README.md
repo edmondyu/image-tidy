@@ -1,12 +1,43 @@
-# Toolbox (Client-Side Web Tools Suite)
+# ebook Publishing Toolbox
 
-This project is a collection of **browser-based tools** for working with images, PDFs, ebooks, text files, and royalty reports. All processing happens **entirely in the browser** (no server, no file upload), making it fast, privacy-friendly, and secure.
+Professional tools for **ebook creation, conversion, and publishing** — all processing happens **entirely in your browser**. No server uploads, no data transmission, completely privacy-friendly and secure.
+
+This collection focuses on ebook publishing workflows while including essential tools for images, PDFs, text processing, and royalty reporting.
 
 ---
 
 ## ✨ Tools Overview
 
-### 1. Image Compression
+### 1. Docs to EPUB
+Convert HTML files exported from Google Docs or InDesign into professionally formatted EPUB ebooks.
+
+**Features:**
+- ✅ **Google Docs & InDesign support** — intelligently processes HTML exports from both platforms
+- ✅ **Automatic chapter splitting** — split by H1, H2, H3 headings or keep as single file
+- ✅ **Image processing** — handles and compresses images from HTML exports
+- ✅ **Extended metadata editor** — title, author, subtitle, publisher, ISBN, description, publish date, tags, author description
+- ✅ **CSV import** — bulk-load metadata with downloadable sample CSV
+- ✅ **Clean XHTML output** — generates valid EPUB 3.0 format
+- ✅ **Custom styling** — includes predefined CSS for professional appearance
+- ✅ **Table of contents** — automatically generates navigation from headings
+- ✅ **Cover image support** — optional cover image upload
+- ✅ **Drag-and-drop UI** — easy file uploads with visual feedback
+
+### 2. EPUB Image Compression
+Compress and resize all images within an EPUB file while preserving filenames and cover image metadata. Reduces EPUB file size without changing structure.
+
+**Features:**
+- ✅ **Batch image processing** — compress all images in an EPUB at once
+- ✅ **Configurable resize** — set max width and height limits
+- ✅ **Quality control** — adjustable JPG compression quality
+- ✅ **Format conversion** — option to convert all images to JPG
+- ✅ **Skip cover option** — preserve original cover image quality
+- ✅ **Intelligent cover detection** — supports EPUB 2/3 cover metadata standards
+- ✅ **Preserves EPUB structure** — maintains all metadata and file organization
+- ✅ **Drag-and-drop UI** — easy EPUB uploads
+- ✅ **Progress tracking** — real-time compression progress
+
+### 3. Image Compression
 Resize and compress multiple images in the browser. Perfect for preparing images for web use or reducing file sizes.
 
 **Features:**
@@ -18,25 +49,7 @@ Resize and compress multiple images in the browser. Perfect for preparing images
 - ✅ **Natural sorting** of filenames (e.g. `image2.jpg` before `image10.jpg`)
 - ✅ **Per-file download links**
 - ✅ **"Download all as ZIP"** (via JSZip)
-
-### 2. PDF to JPG Converter
-Convert PDF files to compressed JPG images. Supports multi-page export and automatic compression.
-
-**Features:**
-- ✅ **Multi-page export** — extract all pages or just the first page
-- ✅ **Automatic compression** — outputs images <1.44M pixels, <300KB
-- ✅ **Batch processing** — convert multiple PDFs at once
-- ✅ **Download all as ZIP** — convenient bulk download
-
-### 3. Extract Ebook Metadata
-Extract metadata from EPUB and PDF files and export to CSV format.
-
-**Features:**
-- ✅ **Support for EPUB and PDF** formats
-- ✅ **Extract key metadata** — title, author, publisher, ISBN, language, publication date
-- ✅ **Additional fields** — tags, comments, series information
-- ✅ **CSV export** — download all metadata in a structured format
-- ✅ **Batch processing** — analyze multiple files at once
+- ✅ **Drag-and-drop UI** — easy image uploads
 
 ### 4. Extract Text from HTML
 Extract structured text from HTML/XHTML files while preserving inline formatting tags.
@@ -45,32 +58,18 @@ Extract structured text from HTML/XHTML files while preserving inline formatting
 - ✅ **Preserve inline tags** — keep only the tags you choose (e.g., `<b>`, `<i>`, `<em>`)
 - ✅ **Generate image filename list** — extract image references from HTML
 - ✅ **Clean output** — removes unnecessary markup while preserving structure
+- ✅ **Drag-and-drop UI** — easy HTML file uploads
 
-### 5. Extract Text from PDF
-Extract text content from text-based PDFs (no OCR).
-
-**Features:**
-- ✅ **Simple text extraction** — outputs plain `.txt` file
-- ✅ **Browser-based** — no server processing required
-- ✅ **Fast processing** — quick extraction for text-based PDFs
-
-### 6. Split Double-Span PDF
-Split 2-page spreads (book scans) into individual single pages.
-
-**Features:**
-- ✅ **Automatic splitting** — converts left+right spreads to separate pages
-- ✅ **Local processing** — all done in your browser
-- ✅ **Perfect for book scans** — ideal for digitized books with facing pages
-
-### 7. Splitting Text File
+### 5. Splitting Text File
 Split text files with chapter markers into multiple segment files.
 
 **Features:**
 - ✅ **Chapter markers** — recognizes `[chX]` and `[break]` markers
 - ✅ **Multiple output files** — one file per chapter/segment
 - ✅ **ZIP packaging** — downloads all segments as a single ZIP file
+- ✅ **Drag-and-drop UI** — easy text file uploads
 
-### 8. Text → XHTML Converter
+### 6. Text → XHTML (with image db)
 Convert text chapter files plus an image database CSV into EPUB-style XHTML files.
 
 **Features:**
@@ -78,8 +77,19 @@ Convert text chapter files plus an image database CSV into EPUB-style XHTML file
 - ✅ **Special formatting** — supports lyrics, image markers, and custom layouts
 - ✅ **EPUB-ready output** — generates properly formatted XHTML for ebook creation
 - ✅ **Batch processing** — convert multiple chapter files at once
+- ✅ **Drag-and-drop UI** — easy file uploads
 
-### 9. Royalty Reporting (Multi-platform)
+### 7. PDF to JPG
+Convert PDF files to compressed JPG images. Supports multi-page export and automatic compression.
+
+**Features:**
+- ✅ **Multi-page export** — extract all pages or just the first page
+- ✅ **Automatic compression** — outputs images <1.44M pixels, <300KB
+- ✅ **Batch processing** — convert multiple PDFs at once
+- ✅ **Download all as ZIP** — convenient bulk download
+- ✅ **Drag-and-drop UI** — easy PDF uploads
+
+### 8. Royalty Reporting (Multi-platform)
 Consolidate royalty reports from multiple platforms into unified summaries.
 
 **Features:**
@@ -87,19 +97,36 @@ Consolidate royalty reports from multiple platforms into unified summaries.
 - ✅ **Per-publisher summaries** — generates separate CSV files for each publisher
 - ✅ **Sales counting** — applies platform-specific rules to count sold copies
 - ✅ **ZIP download** — packages all summary reports together
+- ✅ **Drag-and-drop UI** — easy report uploads
 
-### 10. Google Docs to EPUB Converter
-Convert HTML files exported from Google Docs into professionally formatted EPUB ebooks.
+### 9. Extract Text from PDF
+Extract text content from text-based PDFs (no OCR).
 
 **Features:**
-- ✅ **Google Docs HTML parsing** — intelligently processes Google Docs HTML exports
-- ✅ **Automatic chapter splitting** — split by H1, H2, H3 headings or keep as single file
-- ✅ **Image processing** — handles images from Google Docs exports
-- ✅ **Metadata editor** — add title, author, publisher, ISBN, description
-- ✅ **Clean XHTML output** — generates valid EPUB 3.0 format
-- ✅ **Custom styling** — includes predefined CSS for professional appearance
-- ✅ **Table of contents** — automatically generates navigation from headings
-- ✅ **Cover image support** — optional cover image upload
+- ✅ **Simple text extraction** — outputs plain `.txt` file
+- ✅ **Browser-based** — no server processing required
+- ✅ **Fast processing** — quick extraction for text-based PDFs
+- ✅ **Drag-and-drop UI** — easy PDF uploads
+
+### 10. Split Double-Span PDF
+Split 2-page spreads (book scans) into individual single pages.
+
+**Features:**
+- ✅ **Automatic splitting** — converts left+right spreads to separate pages
+- ✅ **Local processing** — all done in your browser
+- ✅ **Perfect for book scans** — ideal for digitized books with facing pages
+- ✅ **Drag-and-drop UI** — easy PDF uploads
+
+### 11. Extract Ebook Metadata
+Extract metadata from EPUB and PDF files and export to CSV format.
+
+**Features:**
+- ✅ **Support for EPUB and PDF** formats
+- ✅ **Extract key metadata** — title, author, publisher, ISBN, language, publication date
+- ✅ **Additional fields** — tags, comments, series information
+- ✅ **CSV export** — download all metadata in a structured format
+- ✅ **Batch processing** — analyze multiple files at once
+- ✅ **Drag-and-drop UI** — easy ebook uploads
 
 ---
 
@@ -109,6 +136,8 @@ Convert HTML files exported from Google Docs into professionally formatted EPUB 
 - ✅ **No installation** — works directly in modern web browsers
 - ✅ **Offline capable** — once loaded, most tools work without internet
 - ✅ **Cross-platform** — works on Windows, Mac, Linux, and mobile browsers
+- ✅ **Dark mode UI** — professional dark theme (#131313 background) for comfortable extended use
+- ✅ **Drag-and-drop interface** — intuitive file uploads across all tools
 - ✅ **Open source** — inspect and modify the code as needed
 - ✅ **Easy deployment** — static HTML files, deploy anywhere (Netlify, GitHub Pages, etc.)
 
@@ -134,6 +163,62 @@ Convert HTML files exported from Google Docs into professionally formatted EPUB 
 
 ## 📖 Detailed Tool Documentation
 
+### Docs to EPUB Converter
+
+**How it works:**
+- Parses HTML exports from Google Docs or InDesign
+- Automatically detects source format and applies appropriate parsing logic
+- Converts HTML content to EPUB 3.0-compliant XHTML
+- Generates OPF manifest, NCX navigation, and table of contents
+- Processes and compresses images from the HTML
+
+**Features:**
+- **Source format detection**: Automatically handles Google Docs (complex div structure) or InDesign (simple p/span structure)
+- **Chapter splitting**: Split by H1, H2, or H3 headings, or keep as single file
+- **Extended metadata**: Title, author, subtitle, publisher, ISBN, description, publish date, tags, author description
+- **CSV import**: Bulk-load metadata with sample CSV download
+- **Cover image**: Optional cover image upload
+- **Image compression**: Automatically compresses and resizes images
+
+**Usage:**
+1. Select source format (Google Docs or InDesign)
+2. Drag & drop or browse for HTML file
+3. Upload images (if any)
+4. Fill in metadata fields or import from CSV
+5. Configure chapter splitting
+6. Upload cover image (optional)
+7. Click "Convert to EPUB"
+8. Download the generated `.epub` file
+
+### EPUB Image Compression Tool
+
+**How it works:**
+- Extracts EPUB file using JSZip
+- Finds all image files (.jpg, .jpeg, .png, .gif, .webp)
+- Optionally identifies and skips cover image using EPUB metadata
+- Compresses each image using canvas API
+- Repackages as compressed EPUB with DEFLATE compression level 9
+
+**Parameters:**
+- **Max Width/Height (px)**: Resize images larger than these dimensions (100-4000px)
+- **Quality (%)**: JPG compression quality (1-100%)
+- **Enable resize**: Toggle to enable/disable image resizing
+- **Convert to JPG**: Convert all images to JPG format
+- **Skip cover image**: Preserve original cover image quality
+
+**Cover Detection Methods:**
+1. EPUB 3: Item with `properties="cover-image"`
+2. EPUB 2: Meta tag with `name="cover"`
+3. Guide reference: `type="cover"` with image extraction from referenced HTML
+
+**Usage:**
+1. Drag & drop or browse for EPUB file
+2. Configure compression settings (max dimensions, quality)
+3. Enable/disable resize and JPG conversion
+4. Check "Skip cover image" to preserve original cover
+5. Click "Compress EPUB Images"
+6. Download `filename_compressed.epub`
+
 ### Image Compression Tool
 
 **How it works:**
@@ -148,7 +233,7 @@ Convert HTML files exported from Google Docs into professionally formatted EPUB 
 - **Target size (% of resized)**: Integer between 1 and 100 (e.g., 50 = 50% of resized file size)
 
 **Usage:**
-1. Select `.png`, `.jpg`, or `.jpeg` files
+1. Drag & drop or select `.png`, `.jpg`, or `.jpeg` files
 2. Adjust max width, height, and target compression percentage
 3. Click "Process Images"
 4. Download individually or as a ZIP
@@ -165,7 +250,7 @@ Convert HTML files exported from Google Docs into professionally formatted EPUB 
 - Automatic quality adjustment for optimal file size
 
 **Usage:**
-1. Select one or more PDF files
+1. Drag & drop or select one or more PDF files
 2. Choose export mode (first page or all pages)
 3. Click "Convert to JPG"
 4. Download all images as a ZIP
@@ -178,7 +263,7 @@ Convert HTML files exported from Google Docs into professionally formatted EPUB 
 - Collects title, author, publisher, ISBN, language, date, tags, comments, series
 
 **Usage:**
-1. Select EPUB and/or PDF files
+1. Drag & drop or select EPUB and/or PDF files
 2. Click "Extract Metadata"
 3. Review extracted metadata in the table
 4. Download all metadata as a CSV file
@@ -242,10 +327,14 @@ Because these are static HTML files, you can deploy them almost anywhere:
 - **Client-side processing**: Performance depends on the user's browser and machine capabilities
 - **Memory usage**: Very large files or huge batches may consume significant memory
 - **Browser compatibility**: Requires a modern browser (Chrome, Firefox, Edge, Safari recommended)
+- **EPUB tools**:
+  - Requires valid EPUB structure with OPF metadata files
+  - EPUB Image Compression processes all images unless "Skip cover" is checked
+  - Cover image detection supports EPUB 2 and EPUB 3 standards
+  - Docs to EPUB supports Google Docs and InDesign HTML exports
 - **PDF limitations**:
   - Text extraction only works on text-based PDFs (no OCR for scanned documents)
   - Very large PDFs may be slow to process
-- **EPUB support**: Requires valid EPUB structure with OPF metadata files
 - **File size**: Processing hundreds of large files simultaneously may cause performance issues
 - **Privacy**: All processing is local, but files remain in browser memory during processing
 
@@ -258,16 +347,17 @@ Because these are static HTML files, you can deploy them almost anywhere:
 ```
 .
 ├── index.html                    # Landing page with tool cards
+├── gdocs-to-epub.html           # Docs to EPUB converter (Google Docs & InDesign)
+├── epub-image-compress.html     # EPUB Image Compression tool
 ├── image-compression.html        # Image resizer/compressor tool
-├── pdf-to-jpg.html              # PDF to JPG converter
-├── ebook-metadata.html          # Ebook metadata extractor
 ├── html-extractor.html          # HTML text extractor
-├── pdf-extractor.html           # PDF text extractor
-├── pdf-double-span-splitter.html # PDF page splitter
 ├── text-splitter.html           # Text file chapter splitter
 ├── xhtml-converter.html         # Text to XHTML converter
+├── pdf-to-jpg.html              # PDF to JPG converter
 ├── royalty-reporting.html       # Royalty report consolidator
-├── gdocs-to-epub.html           # Google Docs to EPUB converter
+├── pdf-extractor.html           # PDF text extractor
+├── pdf-double-span-splitter.html # PDF page splitter
+├── ebook-metadata.html          # Ebook metadata extractor
 └── README.md                    # This file
 ```
 
@@ -277,8 +367,10 @@ Each tool is self-contained in a single HTML file with embedded CSS and JavaScri
 
 1. Open the relevant `.html` file
 2. The `<script>` block at the bottom contains all the logic
-3. Styling is in the `<style>` block in the `<head>`
+3. Styling is in the `<style>` block in the `<head>` (dark mode theme with `#131313` background, `#50e3c2` accent)
 4. Key functions vary by tool:
+   - **Docs to EPUB**: `generateEpub()`, `extractContentGoogleDocs()`, `extractContentInDesign()`
+   - **EPUB Image Compression**: `compressImage()`, `findCoverImage()`
    - **Image Compression**: `resizeImageBrowser()`, `compressImageFromCanvas()`
    - **PDF to JPG**: PDF.js rendering, canvas conversion
    - **Ebook Metadata**: EPUB/PDF parsing, metadata extraction
@@ -294,27 +386,30 @@ Each tool is self-contained in a single HTML file with embedded CSS and JavaScri
 
 ## 💡 Use Cases
 
-### Publishing & Content Creation
-- Prepare images for web publishing with automatic compression
-- Extract metadata from ebook collections for cataloging
-- Convert PDFs to images for social media or marketing
-- Process book scans by splitting double-page spreads
+### Ebook Publishing & Production
+- Convert Google Docs or InDesign manuscripts to professional EPUBs
+- Compress and optimize images in existing EPUBs to reduce file size
+- Extract and organize ebook metadata for cataloging and inventory
+- Split long manuscripts into chapter files for processing
+- Convert text manuscripts to EPUB-ready XHTML with image database
 
-### Text Processing & Ebook Production
-- Extract and clean text from HTML for editing
-- Convert text manuscripts to EPUB-ready XHTML
-- Split long manuscripts into chapter files
-- Extract text from PDF documents for reuse
+### Content Preparation & Optimization
+- Prepare images for ebook publishing with automatic compression
+- Reduce EPUB file sizes while preserving cover image quality
+- Convert PDFs to images for marketing and social media
+- Process book scans by splitting double-page spreads
 
 ### Business & Administration
 - Consolidate royalty reports from multiple platforms
 - Generate publisher summaries from sales data
-- Extract and organize ebook metadata for inventory management
+- Extract text from PDFs for content reuse and analysis
+- Extract and clean text from HTML for editing
 
 ### Privacy-Conscious Workflows
-- Process sensitive documents without uploading to external servers
-- Handle confidential PDFs and ebooks locally
+- Process sensitive manuscripts without uploading to external servers
+- Handle confidential PDFs and ebooks locally in browser
 - Batch process files without leaving a trace on external systems
+- Compress ebook images without cloud services
 
 ---
 
