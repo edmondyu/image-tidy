@@ -246,6 +246,7 @@
       <div class="row">
         <button id="processBtn" disabled>Process</button>
         <button id="downloadBtn" class="secondary" disabled>Download ZIP</button>
+        <button id="downloadSummaryBtn" class="secondary" disabled>Download Summary XLSX</button>
         <span id="statusPill" class="pill">Idle</span>
       </div>
 
@@ -287,17 +288,21 @@
     // Royalty Reporting Tool (browser-only)
     // =============================
 
-    const PLATFORMS = ['Google', 'kobo', 'koboplus', 'readmoo', 'KDP', 'hyread'];
+    const PLATFORMS = ['google', 'kobo', 'koboplus', 'readmoo', 'kdp', 'hyread'];
+    const PLATFORM_DISPLAY = { google: 'Google', kobo: 'Kobo', koboplus: 'KoboPlus', readmoo: 'Readmoo', kdp: 'KDP', hyread: 'HyRead' };
+    function platformLabel(p) { return PLATFORM_DISPLAY[p] || p; }
 
     const fileInput = document.getElementById('fileInput');
     const reportDropZone = document.getElementById('reportDropZone');
     const processBtn = document.getElementById('processBtn');
     const downloadBtn = document.getElementById('downloadBtn');
+    const downloadSummaryBtn = document.getElementById('downloadSummaryBtn');
     const logEl = document.getElementById('log');
     const statusPill = document.getElementById('statusPill');
     const dateStringEl = document.getElementById('dateString');
 
     let lastZipBlobUrl = null;
+    let lastSummaryBlobUrl = null;
 
     function setStatus(text, type = 'idle') {
       statusPill.textContent = text;
@@ -312,8 +317,11 @@
 
     function resetDownload() {
       downloadBtn.disabled = true;
+      downloadSummaryBtn.disabled = true;
       if (lastZipBlobUrl) URL.revokeObjectURL(lastZipBlobUrl);
+      if (lastSummaryBlobUrl) URL.revokeObjectURL(lastSummaryBlobUrl);
       lastZipBlobUrl = null;
+      lastSummaryBlobUrl = null;
     }
 
     // Drag and drop helper functions
@@ -385,7 +393,7 @@
       const lower = filename.toLowerCase();
       const sorted = [...PLATFORMS].sort((a, b) => b.length - a.length);
       for (const p of sorted) {
-        if (lower.includes(p.toLowerCase())) return p;
+        if (lower.includes(p)) return p;
       }
       return null;
     }
@@ -460,17 +468,15 @@
     }
 
     function deriveCopies(platform, rowLower) {
-      // rowLower keys are already lowercased; Chinese keys remain unchanged
-      if (platform === 'Google') return toNumber(rowLower['qty']);
+      // platform is always lowercase; rowLower keys are already lowercased (Chinese keys unchanged)
+      if (platform === 'google') return toNumber(rowLower['qty']);
       if (platform === 'readmoo') return toNumber(rowLower['銷售數量']);
       if (platform === 'kobo') return toNumber(rowLower['paid units']);
-      if (platform === 'KDP') return toNumber(rowLower['net units sold']);
+      if (platform === 'kdp') return toNumber(rowLower['net units sold']);
 
       if (platform === 'hyread') {
-        // ✅ CHANGE: "備註" no longer requires exact match "單館採購"
-        // It only needs to CONTAIN "單館採購" (tolerates extra text, spaces, line breaks).
         const noteRaw = safeString(rowLower['備註'], '');
-        const noteCompact = noteRaw.replace(/\s+/g, ''); // remove whitespace/newlines
+        const noteCompact = noteRaw.replace(/\s+/g, '');
         return noteCompact.includes('單館採購') ? toNumber(rowLower['借閱人數']) : 0;
       }
 
@@ -491,7 +497,7 @@
           continue;
         }
 
-        log(`Reading ${file.name} as platform: ${platform}`);
+        log(`Reading ${file.name} as platform: ${platformLabel(platform)}`);
 
         let rawRows = [];
         if (file.name.toLowerCase().endsWith('.xlsx')) rawRows = await parseXLSXFile(file);
@@ -525,7 +531,7 @@
         byPublisher.get(pub).push(r);
       }
 
-      const expectedColumns = ['Title', 'Sold_Copies', ...PLATFORMS, 'Total'];
+      const expectedColumns = ['Title', 'Sold_Copies', ...PLATFORMS.map(platformLabel), 'Total'];
       const outputs = [];
 
       for (const [publisher, rows] of byPublisher.entries()) {
@@ -549,7 +555,7 @@
             const sumP = tRows
               .filter(x => x.platform === p)
               .reduce((acc, x) => acc + (x.royalty || 0), 0);
-            rowOut[p] = Math.round(sumP * 100) / 100;
+            rowOut[platformLabel(p)] = Math.round(sumP * 100) / 100;
             totalRoyalty += sumP;
           }
           rowOut['Total'] = Math.round(totalRoyalty * 100) / 100;
@@ -561,12 +567,12 @@
 
         for (const r of table) {
           totalRow['Sold_Copies'] += toNumber(r['Sold_Copies']);
-          for (const p of PLATFORMS) totalRow[p] += toNumber(r[p]);
+          for (const p of PLATFORMS) totalRow[platformLabel(p)] += toNumber(r[platformLabel(p)]);
           totalRow['Total'] += toNumber(r['Total']);
         }
 
         totalRow['Sold_Copies'] = Math.round(totalRow['Sold_Copies']);
-        for (const p of PLATFORMS) totalRow[p] = Math.round(totalRow[p] * 100) / 100;
+        for (const p of PLATFORMS) totalRow[platformLabel(p)] = Math.round(totalRow[platformLabel(p)] * 100) / 100;
         totalRow['Total'] = Math.round(totalRow['Total'] * 100) / 100;
 
         const totalRoyaltyValue = toNumber(totalRow['Total']);
@@ -595,13 +601,32 @@
         log(`  ✓ Created ${outName} (${table.length} title(s))`);
       }
 
+      // Build platform revenue summary
+      const summaryMap = {};
+      for (const p of PLATFORMS) summaryMap[p] = 0;
+      for (const r of allRows) {
+        if (summaryMap[r.platform] !== undefined) summaryMap[r.platform] += (r.royalty || 0);
+      }
+      const summaryRows = PLATFORMS.map(p => ({
+        Platform: platformLabel(p),
+        Revenue: Math.round(summaryMap[p] * 100) / 100
+      }));
+      const grandTotal = summaryRows.reduce((s, r) => s + r.Revenue, 0);
+      summaryRows.push({ Platform: 'Total', Revenue: Math.round(grandTotal * 100) / 100 });
+
+      const summaryWs = XLSX.utils.json_to_sheet(summaryRows);
+      const summaryWb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(summaryWb, summaryWs, 'Platform Summary');
+      const summaryArrayBuf = XLSX.write(summaryWb, { bookType: 'xlsx', type: 'array' });
+      const summaryBlob = new Blob([summaryArrayBuf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
       log(`Creating ZIP with ${outputs.length} report(s)…`);
       const zip = new JSZip();
       for (const o of outputs) zip.file(o.filename, o.content);
       const blob = await zip.generateAsync({ type: 'blob' });
       log('ZIP ready.');
 
-      return { blob, outputsCount: outputs.length };
+      return { blob, summaryBlob, outputsCount: outputs.length };
     }
 
     processBtn.addEventListener('click', async () => {
@@ -614,13 +639,16 @@
 
       processBtn.disabled = true;
       downloadBtn.disabled = true;
+      downloadSummaryBtn.disabled = true;
 
       try {
-        const { blob, outputsCount } = await processFiles(files, dateString);
+        const { blob, summaryBlob, outputsCount } = await processFiles(files, dateString);
         lastZipBlobUrl = URL.createObjectURL(blob);
+        lastSummaryBlobUrl = URL.createObjectURL(summaryBlob);
         downloadBtn.disabled = false;
+        downloadSummaryBtn.disabled = false;
         setStatus(`Done: ${outputsCount} report(s)`, 'ok');
-        log('✅ Done. Click "Download ZIP".');
+        log('✅ Done. Click "Download ZIP" or "Download Summary XLSX".');
       } catch (err) {
         console.error(err);
         setStatus('Error', 'bad');
@@ -642,6 +670,20 @@
       a.remove();
 
       log('⬇️ Download started.');
+    });
+
+    downloadSummaryBtn.addEventListener('click', () => {
+      if (!lastSummaryBlobUrl) return;
+      const dateString = (dateStringEl.value || '').trim() || 'date_range';
+
+      const a = document.createElement('a');
+      a.href = lastSummaryBlobUrl;
+      a.download = `platform_summary_${dateString}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      log('⬇️ Summary XLSX download started.');
     });
 
     setStatus('Idle');
