@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Book Cover Grid – Toolbox</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      background: #131313;
+      color: #f9f9f9;
+    }
+    h1, h2 {
+      margin-top: 0;
+      margin-bottom: 0.25rem;
+      color: #50e3c2;
+    }
+    .subtitle {
+      margin-top: 0;
+      margin-bottom: 1.5rem;
+      color: #9ca3af;
+      font-size: 0.95rem;
+    }
+    .back-link {
+      display: inline-block;
+      margin-bottom: 1rem;
+      color: #50e3c2;
+      text-decoration: none;
+    }
+    .back-link:hover {
+      text-decoration: underline;
+    }
+    .card {
+      background: #1f1f1f;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      margin-bottom: 1.5rem;
+    }
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1.1rem;
+      font-size: 0.95rem;
+      margin-right: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    button.primary {
+      background: #50e3c2;
+      color: #131313;
+      font-weight: 600;
+    }
+    button.primary:hover:not(:disabled) {
+      background: #3dd4b3;
+    }
+    button.secondary {
+      background: #3a3a3a;
+      color: #f9f9f9;
+    }
+    button.secondary:hover:not(:disabled) {
+      background: #4a4a4a;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    input[type="number"] {
+      padding: 0.5rem;
+      border-radius: 6px;
+      border: 1px solid #3a3a3a;
+      background: #2a2a2a;
+      color: #f9f9f9;
+      font-size: 0.9rem;
+      width: 80px;
+    }
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+      margin-top: 1rem;
+    }
+    .controls-row label {
+      font-size: 0.9rem;
+      color: #50e3c2;
+      font-weight: 500;
+    }
+    .hint {
+      font-size: 0.85rem;
+      color: #9ca3af;
+      margin-top: 0.5rem;
+    }
+    .drop-zone {
+      border: 2px dashed #3a3a3a;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      background: #2a2a2a;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .drop-zone.drag-over {
+      border-color: #50e3c2;
+      background: #1a3a35;
+    }
+    .drop-zone.has-file {
+      border-color: #10b981;
+      background: #064e3b;
+    }
+    .drop-zone .drop-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      color: #50e3c2;
+    }
+    .drop-zone.has-file .drop-icon {
+      color: #10b981;
+    }
+    .file-input-wrapper {
+      margin-top: 1rem;
+    }
+    .file-input-wrapper input[type="file"] {
+      display: none;
+    }
+    .browse-btn {
+      display: inline-block;
+      padding: 0.6rem 1.1rem;
+      background: #3a3a3a;
+      color: #f9f9f9;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background 0.2s;
+    }
+    .browse-btn:hover {
+      background: #4a4a4a;
+    }
+    .status {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      display: none;
+      z-index: 9999;
+      min-width: 300px;
+      max-width: 500px;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      animation: slideDown 0.3s ease-out;
+    }
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+    }
+    .status.success {
+      background: #064e3b;
+      color: #6ee7b7;
+      border: 1px solid #10b981;
+    }
+    .status.error {
+      background: #7f1d1d;
+      color: #fca5a5;
+      border: 1px solid #dc2626;
+    }
+    .status.info {
+      background: #1e3a5f;
+      color: #93c5fd;
+      border: 1px solid #2563eb;
+    }
+    .thumbnail-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    .thumbnail-item {
+      position: relative;
+      width: 80px;
+      height: 110px;
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid #3a3a3a;
+    }
+    .thumbnail-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .thumbnail-item .remove-btn {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      margin: 0;
+    }
+    .thumbnail-item .remove-btn:hover {
+      background: #dc2626;
+    }
+    #previewCanvas {
+      max-width: 100%;
+      border: 1px solid #3a3a3a;
+      border-radius: 8px;
+      margin-top: 1rem;
+      display: none;
+    }
+    select {
+      padding: 0.5rem;
+      border-radius: 6px;
+      border: 1px solid #3a3a3a;
+      background: #2a2a2a;
+      color: #f9f9f9;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <a href="index.html" class="back-link">&larr; Back to Toolbox</a>
+
+  <h1>Book Cover Grid</h1>
+  <p class="subtitle">
+    Combine multiple book cover images into a single grid image for catalogs, social media, or promotional materials
+  </p>
+
+  <div class="card">
+    <h2>Upload Cover Images</h2>
+    <div class="drop-zone" id="dropZone">
+      <div class="drop-icon">📚</div>
+      <p><strong>Drag and drop cover images here</strong></p>
+      <p>or</p>
+      <div class="file-input-wrapper">
+        <label for="fileInput" class="browse-btn">Browse Files</label>
+        <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp" multiple />
+      </div>
+    </div>
+    <div class="hint">Supports PNG, JPG, and WebP. You can upload multiple files at once.</div>
+    <div class="thumbnail-list" id="thumbnailList"></div>
+    <div style="margin-top: 0.5rem;">
+      <button class="secondary" id="clearBtn" style="display:none;">Clear All</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Grid Settings</h2>
+    <div class="controls-row">
+      <div>
+        <label for="columns">Columns:</label>
+        <input type="number" id="columns" value="4" min="1" max="20" />
+      </div>
+      <div>
+        <label for="coverHeight">Cover Height (px):</label>
+        <input type="number" id="coverHeight" value="400" min="50" max="4000" />
+      </div>
+    </div>
+    <div class="controls-row">
+      <div>
+        <label for="margin">Margin (px):</label>
+        <input type="number" id="margin" value="20" min="0" max="200" />
+      </div>
+      <div>
+        <label for="padding">Padding (px):</label>
+        <input type="number" id="padding" value="10" min="0" max="200" />
+      </div>
+    </div>
+    <div class="controls-row">
+      <div>
+        <label for="bgColor">Background:</label>
+        <select id="bgColor">
+          <option value="#ffffff">White</option>
+          <option value="#131313">Dark</option>
+          <option value="#000000">Black</option>
+          <option value="transparent">Transparent</option>
+        </select>
+      </div>
+      <div>
+        <label for="outputFormat">Format:</label>
+        <select id="outputFormat">
+          <option value="png">PNG</option>
+          <option value="jpeg">JPG</option>
+        </select>
+      </div>
+    </div>
+    <div class="hint">
+      Margin is the outer spacing around the entire grid. Padding is the space between each cover.
+      All covers will be scaled to the same height while preserving aspect ratio.
+      Rows are calculated automatically based on the number of images and columns.
+    </div>
+
+    <div style="margin-top: 1rem;">
+      <button class="primary" id="generateBtn" disabled>Generate Grid Image</button>
+      <button class="secondary" id="downloadBtn" style="display:none;">Download Image</button>
+    </div>
+  </div>
+
+  <div class="card" id="previewCard" style="display:none;">
+    <h2>Preview</h2>
+    <canvas id="previewCanvas"></canvas>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const thumbnailList = document.getElementById('thumbnailList');
+    const clearBtn = document.getElementById('clearBtn');
+    const generateBtn = document.getElementById('generateBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const previewCanvas = document.getElementById('previewCanvas');
+    const previewCard = document.getElementById('previewCard');
+    const statusEl = document.getElementById('status');
+
+    let coverImages = []; // { file, img, name }
+    let statusTimeout;
+
+    // Drag and drop
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
+      dropZone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); }, false);
+    });
+    dropZone.addEventListener('dragenter', () => dropZone.classList.add('drag-over'));
+    dropZone.addEventListener('dragover', () => dropZone.classList.add('drag-over'));
+    dropZone.addEventListener('dragleave', e => {
+      if (e.target === dropZone) dropZone.classList.remove('drag-over');
+    });
+    dropZone.addEventListener('drop', e => {
+      dropZone.classList.remove('drag-over');
+      addFiles(e.dataTransfer.files);
+    });
+
+    fileInput.addEventListener('change', e => {
+      addFiles(e.target.files);
+      fileInput.value = '';
+    });
+
+    clearBtn.addEventListener('click', () => {
+      coverImages = [];
+      renderThumbnails();
+      dropZone.classList.remove('has-file');
+      generateBtn.disabled = true;
+      downloadBtn.style.display = 'none';
+      previewCard.style.display = 'none';
+      previewCanvas.style.display = 'none';
+    });
+
+    function showStatus(message, type) {
+      statusEl.textContent = message;
+      statusEl.className = 'status ' + type;
+      statusEl.style.display = 'block';
+      if (statusTimeout) clearTimeout(statusTimeout);
+      const delay = type === 'error' ? 8000 : 5000;
+      statusTimeout = setTimeout(() => { statusEl.style.display = 'none'; }, delay);
+    }
+
+    async function addFiles(fileList) {
+      const validTypes = ['image/png', 'image/jpeg', 'image/webp'];
+      const files = Array.from(fileList).filter(f => validTypes.includes(f.type));
+
+      if (files.length === 0) {
+        showStatus('Please upload PNG, JPG, or WebP images', 'error');
+        return;
+      }
+
+      for (const file of files) {
+        const img = await loadImage(file);
+        coverImages.push({ file, img, name: file.name });
+      }
+
+      dropZone.classList.add('has-file');
+      generateBtn.disabled = false;
+      clearBtn.style.display = 'inline-block';
+      renderThumbnails();
+      showStatus(`${coverImages.length} cover image(s) loaded`, 'success');
+    }
+
+    function loadImage(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Failed to load ' + file.name)); };
+        img.src = url;
+      });
+    }
+
+    function renderThumbnails() {
+      thumbnailList.innerHTML = '';
+      coverImages.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.className = 'thumbnail-item';
+
+        const thumb = document.createElement('img');
+        const url = URL.createObjectURL(item.file);
+        thumb.src = url;
+        thumb.alt = item.name;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-btn';
+        removeBtn.textContent = '\u00d7';
+        removeBtn.addEventListener('click', () => {
+          coverImages.splice(index, 1);
+          renderThumbnails();
+          if (coverImages.length === 0) {
+            dropZone.classList.remove('has-file');
+            generateBtn.disabled = true;
+            clearBtn.style.display = 'none';
+          }
+        });
+
+        div.appendChild(thumb);
+        div.appendChild(removeBtn);
+        thumbnailList.appendChild(div);
+      });
+    }
+
+    generateBtn.addEventListener('click', () => {
+      if (coverImages.length === 0) {
+        showStatus('Please upload cover images first', 'error');
+        return;
+      }
+
+      const columns = parseInt(document.getElementById('columns').value) || 4;
+      const coverHeight = parseInt(document.getElementById('coverHeight').value) || 400;
+      const margin = parseInt(document.getElementById('margin').value) || 0;
+      const padding = parseInt(document.getElementById('padding').value) || 0;
+      const bgColor = document.getElementById('bgColor').value;
+
+      const rows = Math.ceil(coverImages.length / columns);
+
+      // Calculate scaled widths for each image (all same height)
+      const scaledImages = coverImages.map(item => {
+        const scale = coverHeight / item.img.naturalHeight;
+        return {
+          img: item.img,
+          width: Math.round(item.img.naturalWidth * scale),
+          height: coverHeight
+        };
+      });
+
+      // Calculate the width of each row and find the max row width
+      let maxRowWidth = 0;
+      for (let r = 0; r < rows; r++) {
+        const startIdx = r * columns;
+        const rowItems = scaledImages.slice(startIdx, startIdx + columns);
+        const rowWidth = rowItems.reduce((sum, item) => sum + item.width, 0)
+          + (rowItems.length - 1) * padding;
+        if (rowWidth > maxRowWidth) maxRowWidth = rowWidth;
+      }
+
+      const canvasWidth = maxRowWidth + margin * 2;
+      const canvasHeight = rows * coverHeight + (rows - 1) * padding + margin * 2;
+
+      const canvas = previewCanvas;
+      const ctx = canvas.getContext('2d');
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+
+      // Background
+      if (bgColor === 'transparent') {
+        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+      } else {
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+      }
+
+      // Draw covers
+      let idx = 0;
+      for (let r = 0; r < rows; r++) {
+        const startIdx = r * columns;
+        const rowItems = scaledImages.slice(startIdx, startIdx + columns);
+
+        // Center the row horizontally
+        const rowWidth = rowItems.reduce((sum, item) => sum + item.width, 0)
+          + (rowItems.length - 1) * padding;
+        let x = margin + (maxRowWidth - rowWidth) / 2;
+        const y = margin + r * (coverHeight + padding);
+
+        for (const item of rowItems) {
+          ctx.drawImage(item.img, x, y, item.width, item.height);
+          x += item.width + padding;
+          idx++;
+        }
+      }
+
+      previewCard.style.display = 'block';
+      canvas.style.display = 'block';
+      downloadBtn.style.display = 'inline-block';
+      showStatus(`Grid generated: ${columns} columns, ${rows} row(s), ${coverImages.length} covers`, 'success');
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      const format = document.getElementById('outputFormat').value;
+      const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+      const ext = format === 'jpeg' ? '.jpg' : '.png';
+      const quality = format === 'jpeg' ? 0.92 : undefined;
+
+      previewCanvas.toBlob(blob => {
+        if (!blob) {
+          showStatus('Failed to export image', 'error');
+          return;
+        }
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'book-cover-grid' + ext;
+        link.click();
+        URL.revokeObjectURL(link.href);
+      }, mimeType, quality);
+    });
+  </script>
+</body>
+</html>
