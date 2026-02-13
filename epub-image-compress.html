@@ -442,13 +442,14 @@
         for (const imageFile of imageFiles) {
           const imageData = await imageFile.file.async('blob');
 
-          // Determine output filename (change extension if converting to JPG)
+          const compressedBlob = await compressImage(imageData, maxWidth, maxHeight, quality, enableResize, convertToJpg);
+
+          // Only change extension to .jpg if the image was actually re-encoded (not the original blob)
           let outputPath = imageFile.path;
-          if (convertToJpg && !imageFile.path.toLowerCase().endsWith('.jpg') && !imageFile.path.toLowerCase().endsWith('.jpeg')) {
+          const wasReEncoded = compressedBlob !== imageData;
+          if (wasReEncoded && convertToJpg && !imageFile.path.toLowerCase().endsWith('.jpg') && !imageFile.path.toLowerCase().endsWith('.jpeg')) {
             outputPath = imageFile.path.substring(0, imageFile.path.lastIndexOf('.')) + '.jpg';
           }
-
-          const compressedBlob = await compressImage(imageData, maxWidth, maxHeight, quality, enableResize, convertToJpg);
 
           // Replace the image in the zip (with new path if converted to JPG)
           if (outputPath !== imageFile.path) {
@@ -579,31 +580,43 @@
         img.onload = async () => {
           URL.revokeObjectURL(url);
 
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-
           // Calculate new dimensions
           let width = img.width;
           let height = img.height;
+          let needsResize = false;
 
           if (enableResize && (width > maxWidth || height > maxHeight)) {
             const ratio = Math.min(maxWidth / width, maxHeight / height);
             width = Math.round(width * ratio);
             height = Math.round(height * ratio);
+            needsResize = true;
           }
 
+          // If no resize needed and no format conversion, keep the original
+          if (!needsResize && !convertToJpg) {
+            resolve(blob);
+            return;
+          }
+
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
           canvas.width = width;
           canvas.height = height;
           ctx.drawImage(img, 0, 0, width, height);
 
           // Determine output format
           const outputType = convertToJpg ? 'image/jpeg' : (blob.type || 'image/jpeg');
-          const outputQuality = convertToJpg ? quality : 1.0;
+          const outputQuality = quality;
 
           // Convert to specified format
           canvas.toBlob((compressedBlob) => {
             if (compressedBlob) {
-              resolve(compressedBlob);
+              // Keep the original if re-encoding made it larger
+              if (compressedBlob.size >= blob.size) {
+                resolve(blob);
+              } else {
+                resolve(compressedBlob);
+              }
             } else {
               reject(new Error('Failed to compress image'));
             }
