@@ -5450,7 +5450,7 @@ ${navItems}  </ol>
 
     // Generate content.opf
     function generateContentOPF(metadata, chapters, images) {
-      const now = new Date().toISOString();
+      const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 
       // Manifest items
       let manifestItems = '';
