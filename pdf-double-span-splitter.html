@@ -258,6 +258,10 @@
       srcCanvas.width = viewport.width;
       srcCanvas.height = viewport.height;
 
+      // Pre-fill with white so transparent PDF areas don't become black in JPEG
+      srcCtx.fillStyle = "white";
+      srcCtx.fillRect(0, 0, srcCanvas.width, srcCanvas.height);
+
       await page.render({
         canvasContext: srcCtx,
         viewport
