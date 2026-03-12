@@ -151,6 +151,7 @@
 
   <!-- PDF.js UMD build (global pdfjsLib) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
   <a class="back" href="index.html">← Back to Toolbox</a>
@@ -226,6 +227,7 @@
     <div class="controls-row">
       <button id="extract-btn" class="primary" disabled>Extract Text</button>
       <button id="download-btn" class="secondary" disabled>Download .txt</button>
+      <button id="extract-images-btn" class="primary" disabled>Extract Pages as Images (ZIP)</button>
       <button id="clear-btn" class="secondary">Clear</button>
     </div>
 
@@ -249,6 +251,7 @@
     const pdfDropZone = document.getElementById("pdfDropZone");
     const extractBtn = document.getElementById("extract-btn");
     const downloadBtn = document.getElementById("download-btn");
+    const extractImagesBtn = document.getElementById("extract-images-btn");
     const clearBtn = document.getElementById("clear-btn");
     const logEl = document.getElementById("log");
     const previewEl = document.getElementById("preview");
@@ -354,6 +357,7 @@
       }
 
       extractBtn.disabled = false;
+      extractImagesBtn.disabled = false;
       pdfDropZone.classList.add('has-file');
       log("Selected: " + selectedFile.name + " (" + Math.round(selectedFile.size/1024) + " KB)");
     }
@@ -380,6 +384,7 @@
       selectedFile = null;
       pdfFileInput.value = "";
       extractBtn.disabled = true;
+      extractImagesBtn.disabled = true;
       logEl.textContent = "";
       pdfDropZone.classList.remove('has-file');
       resetOutputs();
@@ -778,6 +783,65 @@
         alert("Error extracting PDF: " + (e && e.message ? e.message : String(e)));
       } finally {
         extractBtn.disabled = !selectedFile;
+      }
+    });
+    // ---------- Image extraction ----------
+
+    extractImagesBtn.addEventListener("click", async () => {
+      if (!selectedFile) return;
+
+      extractImagesBtn.disabled = true;
+      logEl.textContent = "";
+
+      try {
+        log("Reading PDF for image extraction...");
+        const buf = await selectedFile.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+        log("Rendering " + pdf.numPages + " page(s) at 2x scale...");
+
+        const zip = new JSZip();
+        const baseName = selectedFile.name.replace(/\.[^.]+$/, "");
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          log(`Rendering page ${pageNum}/${pdf.numPages}...`);
+          const page = await pdf.getPage(pageNum);
+          const viewport = page.getViewport({ scale: 2 });
+
+          const canvas = document.createElement("canvas");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext("2d");
+
+          // White background so transparent areas don't become black in JPEG
+          ctx.fillStyle = "white";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          await page.render({ canvasContext: ctx, viewport }).promise;
+
+          const blob = await new Promise(resolve =>
+            canvas.toBlob(resolve, "image/jpeg", 0.92)
+          );
+          const arrayBuffer = await blob.arrayBuffer();
+
+          const filename = `${baseName}_page${String(pageNum).padStart(3, "0")}.jpg`;
+          zip.file(filename, arrayBuffer);
+        }
+
+        log("Creating ZIP archive...");
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = baseName + "_images.zip";
+        a.click();
+        URL.revokeObjectURL(url);
+
+        log(`Done. ${pdf.numPages} image(s) saved to ${baseName}_images.zip`);
+      } catch (e) {
+        log("Error: " + (e && e.message ? e.message : String(e)));
+      } finally {
+        extractImagesBtn.disabled = !selectedFile;
       }
     });
   </script>
