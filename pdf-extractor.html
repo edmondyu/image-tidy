@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Extract Text from PDF – Toolbox</title>
+  <title>Extract Content from PDF – Toolbox</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body {
@@ -156,9 +156,9 @@
 <body>
   <a class="back" href="index.html">← Back to Toolbox</a>
 
-  <h1>Extract Text from PDF</h1>
+  <h1>Extract Content from PDF</h1>
   <p class="subtitle">
-    Extract text from a <strong>text-based</strong> PDF (no OCR). Includes options to fix PDF spacing/line breaks, and optional Simplified → Traditional conversion via your Netlify proxy.
+    Extract text and embedded images from a PDF. Text extraction supports layout-aware modes and optional Simplified → Traditional conversion via your Netlify proxy.
   </p>
 
   <div class="card">
@@ -227,7 +227,7 @@
     <div class="controls-row">
       <button id="extract-btn" class="primary" disabled>Extract Text</button>
       <button id="download-btn" class="secondary" disabled>Download .txt</button>
-      <button id="extract-images-btn" class="primary" disabled>Extract Pages as Images (ZIP)</button>
+      <button id="extract-images-btn" class="primary" disabled>Extract Images</button>
       <button id="clear-btn" class="secondary">Clear</button>
     </div>
 
@@ -797,7 +797,7 @@
     }
 
     // Group images whose page-space bounding boxes share an edge (adjacent tiles)
-    function groupAdjacentImages(images, tol=2) {
+    function groupAdjacentImages(images, tol=6) {
       const n = images.length;
       const visited = new Array(n).fill(false);
       const groups = [];
@@ -829,45 +829,58 @@
     // Stitch a group of adjacent tiles into one canvas.
     // Tiles must form a perfect N×M grid; returns null if they don't.
     function stitchTiles(tiles) {
-      const tol = 2;
-      const uniqueXs = [...new Set(tiles.map(t => Math.round(t.x)))].sort((a,b) => a-b);
-      // Sort Y descending: highest PDF-y = top of image = top of canvas
-      const uniqueYs = [...new Set(tiles.map(t => Math.round(t.y)))].sort((a,b) => b-a);
+      const tol = 6;
 
-      if (tiles.length !== uniqueXs.length * uniqueYs.length) return null;
+      // Tolerance-based centroid clustering: groups nearby values and returns
+      // sorted cluster representatives (centroids).
+      function clusterVals(vals, descending) {
+        const sorted = [...vals].sort((a, b) => a - b);
+        const clusters = []; // { rep, sum, cnt }
+        for (const v of sorted) {
+          const c = clusters.find(c => Math.abs(c.rep - v) <= tol);
+          if (c) { c.sum += v; c.cnt++; c.rep = c.sum / c.cnt; }
+          else clusters.push({ rep: v, sum: v, cnt: 1 });
+        }
+        return clusters.sort((a, b) => descending ? b.rep - a.rep : a.rep - b.rep);
+      }
 
-      // Accumulate pixel column offsets (left → right)
-      const xOff = {};
-      let cx = 0;
-      for (const ux of uniqueXs) {
-        xOff[ux] = cx;
-        const t = tiles.find(t => Math.abs(t.x-ux) < tol);
-        cx += t ? t.imgData.width : 0;
+      const xClusters = clusterVals(tiles.map(t => t.x), false); // left → right
+      const yClusters = clusterVals(tiles.map(t => t.y), true);  // top → bottom (high PDF-y first)
+
+      if (tiles.length !== xClusters.length * yClusters.length) return null;
+
+      // Accumulate pixel offsets per column and row
+      const xOff = new Array(xClusters.length).fill(0);
+      for (let ci = 1; ci < xClusters.length; ci++) {
+        const t = tiles.find(t => Math.abs(t.x - xClusters[ci-1].rep) <= tol);
+        xOff[ci] = xOff[ci-1] + (t ? t.imgData.width : 0);
       }
-      // Accumulate pixel row offsets (top → bottom in canvas)
-      const yOff = {};
-      let cy = 0;
-      for (const uy of uniqueYs) {
-        yOff[uy] = cy;
-        const t = tiles.find(t => Math.abs(t.y-uy) < tol);
-        cy += t ? t.imgData.height : 0;
+      const yOff = new Array(yClusters.length).fill(0);
+      for (let ri = 1; ri < yClusters.length; ri++) {
+        const t = tiles.find(t => Math.abs(t.y - yClusters[ri-1].rep) <= tol);
+        yOff[ri] = yOff[ri-1] + (t ? t.imgData.height : 0);
       }
+
+      const lastXTile = tiles.find(t => Math.abs(t.x - xClusters[xClusters.length-1].rep) <= tol);
+      const lastYTile = tiles.find(t => Math.abs(t.y - yClusters[yClusters.length-1].rep) <= tol);
+      const totalW = xOff[xClusters.length-1] + (lastXTile ? lastXTile.imgData.width : 0);
+      const totalH = yOff[yClusters.length-1] + (lastYTile ? lastYTile.imgData.height : 0);
 
       const canvas = document.createElement("canvas");
-      canvas.width = cx; canvas.height = cy;
+      canvas.width = totalW; canvas.height = totalH;
       if (!canvas.width || !canvas.height) return null;
       const ctx = canvas.getContext("2d");
 
       for (const tile of tiles) {
+        const ci = xClusters.findIndex(c => Math.abs(c.rep - tile.x) <= tol);
+        const ri = yClusters.findIndex(c => Math.abs(c.rep - tile.y) <= tol);
+        if (ci < 0 || ri < 0) return null;
         const tc = document.createElement("canvas");
         tc.width = tile.imgData.width; tc.height = tile.imgData.height;
         tc.getContext("2d").putImageData(
           new ImageData(toRGBA(tile.imgData), tile.imgData.width, tile.imgData.height), 0, 0
         );
-        const nearX = uniqueXs.find(ux => Math.abs(tile.x-ux) < tol);
-        const nearY = uniqueYs.find(uy => Math.abs(tile.y-uy) < tol);
-        if (nearX === undefined || nearY === undefined) return null;
-        ctx.drawImage(tc, xOff[nearX], yOff[nearY]);
+        ctx.drawImage(tc, xOff[ci], yOff[ri]);
       }
       return canvas;
     }
