@@ -787,6 +787,38 @@
     });
     // ---------- Image extraction ----------
 
+    // Convert pdf.js imgData (various kinds) to a Uint8ClampedArray of RGBA
+    function toRGBA(imgData) {
+      const { width, height, kind, data } = imgData;
+      const pixels = width * height;
+      const rgba = new Uint8ClampedArray(pixels * 4);
+
+      if (kind === 1) {
+        // GRAYSCALE_1BPP — packed bits, MSB first
+        const bytesPerRow = (width + 7) >> 3;
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const byteIdx = y * bytesPerRow + (x >> 3);
+            const val = (data[byteIdx] >> (7 - (x & 7))) & 1 ? 255 : 0;
+            const i = (y * width + x) * 4;
+            rgba[i] = val; rgba[i+1] = val; rgba[i+2] = val; rgba[i+3] = 255;
+          }
+        }
+      } else if (kind === 2) {
+        // RGB_24BPP
+        for (let k = 0; k < pixels; k++) {
+          rgba[k*4]   = data[k*3];
+          rgba[k*4+1] = data[k*3+1];
+          rgba[k*4+2] = data[k*3+2];
+          rgba[k*4+3] = 255;
+        }
+      } else {
+        // RGBA_32BPP or unknown — use as-is
+        rgba.set(data instanceof Uint8ClampedArray ? data : new Uint8ClampedArray(data.buffer || data));
+      }
+      return rgba;
+    }
+
     extractImagesBtn.addEventListener("click", async () => {
       if (!selectedFile) return;
 
@@ -794,42 +826,64 @@
       logEl.textContent = "";
 
       try {
-        log("Reading PDF for image extraction...");
+        log("Reading PDF...");
         const buf = await selectedFile.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-        log("Rendering " + pdf.numPages + " page(s) at 2x scale...");
+        log(`Scanning ${pdf.numPages} page(s) for embedded images...`);
 
         const zip = new JSZip();
         const baseName = selectedFile.name.replace(/\.[^.]+$/, "");
+        let totalImages = 0;
 
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-          log(`Rendering page ${pageNum}/${pdf.numPages}...`);
           const page = await pdf.getPage(pageNum);
-          const viewport = page.getViewport({ scale: 2 });
+          const ops = await page.getOperatorList();
 
-          const canvas = document.createElement("canvas");
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          const ctx = canvas.getContext("2d");
+          const seen = new Set();
+          let pageImgIdx = 0;
 
-          // White background so transparent areas don't become black in JPEG
-          ctx.fillStyle = "white";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          for (let j = 0; j < ops.fnArray.length; j++) {
+            const fn = ops.fnArray[j];
+            let imgData = null;
 
-          await page.render({ canvasContext: ctx, viewport }).promise;
+            if (fn === pdfjsLib.OPS.paintImageXObject || fn === pdfjsLib.OPS.paintJpegXObject) {
+              const imgName = ops.argsArray[j][0];
+              if (seen.has(imgName)) continue;
+              seen.add(imgName);
+              imgData = await new Promise(resolve => page.objs.get(imgName, resolve));
+            } else if (fn === pdfjsLib.OPS.paintInlineImageXObject) {
+              imgData = ops.argsArray[j][0];
+            }
 
-          const blob = await new Promise(resolve =>
-            canvas.toBlob(resolve, "image/jpeg", 0.92)
-          );
-          const arrayBuffer = await blob.arrayBuffer();
+            if (!imgData || !imgData.width || !imgData.height) continue;
+            // Skip tiny decorative elements
+            if (imgData.width < 50 || imgData.height < 50) continue;
 
-          const filename = `${baseName}_page${String(pageNum).padStart(3, "0")}.jpg`;
-          zip.file(filename, arrayBuffer);
+            const rgba = toRGBA(imgData);
+            const c = document.createElement("canvas");
+            c.width = imgData.width;
+            c.height = imgData.height;
+            c.getContext("2d").putImageData(new ImageData(rgba, imgData.width, imgData.height), 0, 0);
+
+            const blob = await new Promise(resolve => c.toBlob(resolve, "image/jpeg", 0.92));
+            const arrayBuffer = await blob.arrayBuffer();
+
+            pageImgIdx++;
+            totalImages++;
+            const filename = `${baseName}_p${String(pageNum).padStart(3,"0")}_img${String(pageImgIdx).padStart(2,"0")}.jpg`;
+            zip.file(filename, arrayBuffer);
+          }
+
+          if (pageImgIdx > 0) log(`Page ${pageNum}: extracted ${pageImgIdx} image(s)`);
         }
 
-        log("Creating ZIP archive...");
-        const zipBlob = await zip.generateAsync({ type: "blob" });
+        if (totalImages === 0) {
+          log("No embedded images found in this PDF.");
+          return;
+        }
 
+        log(`Creating ZIP with ${totalImages} image(s)...`);
+        const zipBlob = await zip.generateAsync({ type: "blob" });
         const url = URL.createObjectURL(zipBlob);
         const a = document.createElement("a");
         a.href = url;
@@ -837,7 +891,7 @@
         a.click();
         URL.revokeObjectURL(url);
 
-        log(`Done. ${pdf.numPages} image(s) saved to ${baseName}_images.zip`);
+        log(`Done. ${totalImages} image(s) saved to ${baseName}_images.zip`);
       } catch (e) {
         log("Error: " + (e && e.message ? e.message : String(e)));
       } finally {
