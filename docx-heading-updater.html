@@ -35,6 +35,10 @@
     button.primary:hover:not(:disabled) { background: #3dd4b3; }
     button.secondary { background: #3a3a3a; color: #f9f9f9; }
     button.secondary:hover:not(:disabled) { background: #4a4a4a; }
+    button.danger { background: transparent; color: #f87171; border: 1px solid #7f1d1d; padding: 0.3rem 0.7rem; font-size: 0.85rem; }
+    button.danger:hover { background: #2d1515; }
+    button.add-rule { background: transparent; color: #50e3c2; border: 1px dashed #50e3c2; padding: 0.45rem 1rem; font-size: 0.88rem; margin-top: 0.5rem; }
+    button.add-rule:hover { background: #1a3a35; }
     button:disabled { opacity: 0.6; cursor: default; }
     label.field-label {
       color: #50e3c2;
@@ -56,13 +60,6 @@
     select { font-family: inherit; }
     .hint { font-size: 0.85rem; color: #9ca3af; margin-top: 0.3rem; }
     .field-group { margin-bottom: 1rem; }
-    .controls-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-      align-items: center;
-      margin-bottom: 1rem;
-    }
     .inline-label {
       display: inline-flex;
       align-items: center;
@@ -132,6 +129,35 @@
       border-radius: 4px;
       font-size: 0.85em;
     }
+    /* Rule blocks */
+    .rule-block {
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 1rem 1.1rem 0.5rem;
+      margin-bottom: 0.75rem;
+      background: #181818;
+    }
+    .rule-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+    }
+    .rule-label {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #50e3c2;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .rule-bottom-row {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      flex-wrap: wrap;
+      margin-top: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
@@ -140,8 +166,8 @@
 
   <h1>Batch Update DOCX Headings</h1>
   <p class="subtitle">
-    Apply a heading style (H1–H6) to every paragraph in a Word document whose text matches a regular expression.
-    You can run multiple passes on the downloaded file to apply different heading levels.
+    Apply heading styles (H1–H6) to every paragraph whose text matches a regular expression.
+    Define up to 3 rules — each rule applies a different heading level. Rules are tested in order; the first match wins.
   </p>
 
   <!-- Step 1 -->
@@ -160,39 +186,19 @@
 
   <!-- Step 2 -->
   <div class="card">
-    <h2>2. Configure Rule</h2>
-
-    <div class="field-group">
-      <label class="field-label" for="regexInput">Regex pattern</label>
-      <input type="text" id="regexInput" placeholder="e.g.  ^Chapter\s+\d+  or  第.+章" />
-      <div class="hint">
-        JavaScript regex. Tested against the full concatenated text of each paragraph.
-        Example: <code>^第.+章</code> matches paragraphs starting with "第…章".
-      </div>
+    <h2>2. Configure Rules</h2>
+    <div class="hint" style="margin-bottom:1rem;">
+      JavaScript regex tested against the full concatenated text of each paragraph.
+      Example: <code>^第.+章</code> matches paragraphs starting with "第…章".
+      Rules are applied in order — the first matching rule wins per paragraph.
     </div>
 
-    <div class="controls-row">
-      <label class="inline-label">
-        <input type="checkbox" id="flagI" />
-        Case insensitive (<code>i</code>)
-      </label>
-    </div>
-
-    <div class="field-group">
-      <label class="field-label" for="headingLevel">Apply heading level</label>
-      <select id="headingLevel">
-        <option value="1">Heading 1 (H1)</option>
-        <option value="2">Heading 2 (H2)</option>
-        <option value="3">Heading 3 (H3)</option>
-        <option value="4">Heading 4 (H4)</option>
-        <option value="5">Heading 5 (H5)</option>
-        <option value="6">Heading 6 (H6)</option>
-      </select>
-    </div>
+    <div id="rulesContainer"></div>
+    <button class="add-rule" id="addRuleBtn">+ Add Rule</button>
 
     <div id="errorMsg" class="error-msg" style="display:none;"></div>
 
-    <div style="margin-top:1rem;">
+    <div style="margin-top:1.25rem;">
       <button id="applyBtn" class="primary" disabled>Apply Headings</button>
     </div>
   </div>
@@ -211,6 +217,82 @@
     let selectedFile = null;
     let outputBlob = null;
     let outputFilename = '';
+
+    // ── Rule UI ───────────────────────────────────────────────────────────────
+    const MAX_RULES = 3;
+    const rulesContainer = document.getElementById('rulesContainer');
+    const addRuleBtn = document.getElementById('addRuleBtn');
+
+    function createRuleBlock(index) {
+      const div = document.createElement('div');
+      div.className = 'rule-block';
+      div.dataset.ruleIndex = index;
+      div.innerHTML =
+        '<div class="rule-header">' +
+          '<span class="rule-label">Rule ' + (index + 1) + '</span>' +
+          (index > 0 ? '<button class="danger remove-rule-btn">Remove</button>' : '') +
+        '</div>' +
+        '<div class="field-group" style="margin-bottom:0.5rem;">' +
+          '<input type="text" class="rule-regex" placeholder="Regex pattern, e.g. ^Chapter\\s+\\d+" />' +
+        '</div>' +
+        '<div class="rule-bottom-row">' +
+          '<label class="inline-label">' +
+            '<input type="checkbox" class="rule-flag-i" /> Case insensitive (<code>i</code>)' +
+          '</label>' +
+          '<label class="inline-label" style="gap:0.6rem;">' +
+            'Heading: ' +
+            '<select class="rule-level">' +
+              [1,2,3,4,5,6].map(n => '<option value="' + n + '"' + (n === index + 1 ? ' selected' : '') + '>H' + n + ' – Heading ' + n + '</option>').join('') +
+            '</select>' +
+          '</label>' +
+        '</div>';
+
+      if (index > 0) {
+        div.querySelector('.remove-rule-btn').addEventListener('click', () => removeRule(div));
+      }
+      div.querySelector('.rule-level').addEventListener('change', syncHeadingOptions);
+      return div;
+    }
+
+    function addRule() {
+      const count = rulesContainer.children.length;
+      if (count >= MAX_RULES) return;
+      rulesContainer.appendChild(createRuleBlock(count));
+      syncHeadingOptions();
+      addRuleBtn.style.display = rulesContainer.children.length >= MAX_RULES ? 'none' : '';
+    }
+
+    function removeRule(block) {
+      rulesContainer.removeChild(block);
+      // Re-number remaining rule labels
+      Array.from(rulesContainer.children).forEach((b, i) => {
+        b.dataset.ruleIndex = i;
+        b.querySelector('.rule-label').textContent = 'Rule ' + (i + 1);
+      });
+      syncHeadingOptions();
+      addRuleBtn.style.display = rulesContainer.children.length >= MAX_RULES ? 'none' : '';
+    }
+
+    function syncHeadingOptions() {
+      const blocks = Array.from(rulesContainer.children);
+      const selectedLevels = blocks.map(b => b.querySelector('.rule-level').value);
+      blocks.forEach((b, i) => {
+        const sel = b.querySelector('.rule-level');
+        const current = sel.value;
+        Array.from(sel.options).forEach(opt => {
+          opt.disabled = selectedLevels.some((v, j) => j !== i && v === opt.value);
+        });
+        // If current selection became disabled (shouldn't happen on add, can on sync), pick first free
+        if (sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].disabled) {
+          const free = Array.from(sel.options).find(o => !o.disabled);
+          if (free) sel.value = free.value;
+        }
+      });
+    }
+
+    addRuleBtn.addEventListener('click', addRule);
+    // Initialise with one rule
+    addRule();
 
     // ── Drag & drop ──────────────────────────────────────────────────────────
     const dropZone = document.getElementById('dropZone');
@@ -240,20 +322,34 @@
 
     // ── Apply ─────────────────────────────────────────────────────────────────
     applyBtn.addEventListener('click', async () => {
-      const patternStr = document.getElementById('regexInput').value.trim();
       const errorEl = document.getElementById('errorMsg');
       errorEl.style.display = 'none';
 
-      if (!patternStr) { showError('Please enter a regex pattern.'); return; }
       if (!selectedFile) { showError('Please select a DOCX file.'); return; }
 
-      // Validate regex
-      let regex;
-      try {
-        const flags = document.getElementById('flagI').checked ? 'i' : '';
-        regex = new RegExp(patternStr, flags);
-      } catch (e) {
-        showError('Invalid regular expression: ' + e.message);
+      // Collect and validate rules
+      const rules = [];
+      const blocks = Array.from(rulesContainer.children);
+      for (let i = 0; i < blocks.length; i++) {
+        const b = blocks[i];
+        const patternStr = b.querySelector('.rule-regex').value.trim();
+        if (!patternStr) { showError('Rule ' + (i + 1) + ': please enter a regex pattern.'); return; }
+        const flags = b.querySelector('.rule-flag-i').checked ? 'i' : '';
+        let regex;
+        try {
+          regex = new RegExp(patternStr, flags);
+        } catch (e) {
+          showError('Rule ' + (i + 1) + ': invalid regular expression — ' + e.message);
+          return;
+        }
+        const level = parseInt(b.querySelector('.rule-level').value, 10);
+        rules.push({ regex, level });
+      }
+
+      // Guard: duplicate levels (shouldn't happen via UI but be safe)
+      const levels = rules.map(r => r.level);
+      if (new Set(levels).size !== levels.length) {
+        showError('Two or more rules use the same heading level. Please assign a different level to each rule.');
         return;
       }
 
@@ -261,17 +357,16 @@
       applyBtn.textContent = 'Processing…';
 
       try {
-        const level = parseInt(document.getElementById('headingLevel').value, 10);
-        const { results, blob } = await processDocx(selectedFile, regex, level);
+        const { results, blob } = await processDocx(selectedFile, rules);
 
         if (results.length === 0) {
-          showError('No paragraphs matched the pattern. No changes made.');
+          showError('No paragraphs matched any pattern. No changes made.');
           return;
         }
 
         outputBlob = blob;
         outputFilename = selectedFile.name.replace(/\.docx$/i, '') + '_headings.docx';
-        showResults(results, level);
+        showResults(results);
       } catch (e) {
         showError('Error: ' + (e.message || String(e)));
       } finally {
@@ -286,18 +381,24 @@
       el.style.display = 'block';
     }
 
-    function showResults(results, level) {
+    function showResults(results) {
       const card = document.getElementById('resultsCard');
+
+      // Summary line
+      const byLevel = {};
+      results.forEach(r => { byLevel[r.level] = (byLevel[r.level] || 0) + 1; });
+      const parts = Object.keys(byLevel).sort((a,b) => a-b)
+        .map(l => byLevel[l] + ' as <strong>H' + l + '</strong>');
       document.getElementById('resultsSummary').innerHTML =
         '<strong>' + results.length + '</strong> paragraph' + (results.length === 1 ? '' : 's') +
-        ' updated → <strong>Heading ' + level + '</strong>';
+        ' updated — ' + parts.join(', ');
 
       const rows = results.map((r, i) =>
         '<tr>' +
         '<td class="col-num">' + (i + 1) + '</td>' +
         '<td class="col-text">' + escHtml(r.text.length > 120 ? r.text.slice(0, 120) + '…' : r.text) + '</td>' +
         '<td class="col-old">' + escHtml(r.oldStyle) + '</td>' +
-        '<td class="col-new">Heading ' + level + '</td>' +
+        '<td class="col-new">Heading ' + r.level + '</td>' +
         '</tr>'
       ).join('');
 
@@ -325,19 +426,17 @@
 
     // ── Core DOCX processing ──────────────────────────────────────────────────
     function setParaStyle(paraXml, styleId) {
-      const newPStyle = `<w:pStyle w:val="${styleId}"/>`;
+      const newPStyle = '<w:pStyle w:val="' + styleId + '"/>';
       if (/<w:pStyle[^>]*\/>/.test(paraXml))
         return paraXml.replace(/<w:pStyle[^>]*\/>/, newPStyle);
       if (/<w:pPr[\s>]/.test(paraXml))
-        return paraXml.replace(/(<w:pPr[^>]*>)/, `$1${newPStyle}`);
-      return paraXml.replace(/(<w:p(?:\s[^>]*)?>)/, `$1<w:pPr>${newPStyle}</w:pPr>`);
+        return paraXml.replace(/(<w:pPr[^>]*>)/, '$1' + newPStyle);
+      return paraXml.replace(/(<w:p(?:\s[^>]*)?>)/, '$1<w:pPr>' + newPStyle + '</w:pPr>');
     }
 
     function resolveHeadingStyleId(stylesXml, level) {
-      // Try exact English styleId e.g. "Heading1"
       const exactId = 'Heading' + level;
       if (new RegExp('w:styleId="' + exactId + '"').test(stylesXml)) return exactId;
-      // Search for a style whose w:name matches "heading N" (any locale)
       const styleBlocks = [...stylesXml.matchAll(/<w:style\b[^>]*>[\s\S]*?<\/w:style>/g)];
       for (const blk of styleBlocks) {
         const nameM = blk[0].match(/<w:name[^>]+w:val="([^"]+)"/);
@@ -346,10 +445,10 @@
           if (idM) return idM[1];
         }
       }
-      return exactId; // fallback
+      return exactId;
     }
 
-    async function processDocx(file, regex, level) {
+    async function processDocx(file, rules) {
       const zip = await JSZip.loadAsync(await file.arrayBuffer());
 
       const docEntry = zip.file('word/document.xml');
@@ -357,15 +456,19 @@
 
       let docXml = await docEntry.async('string');
 
-      // Resolve the actual styleId for the requested heading level
       const stylesEntry = zip.file('word/styles.xml');
       const stylesXml = stylesEntry ? await stylesEntry.async('string') : '';
-      const styleId = resolveHeadingStyleId(stylesXml, level);
+
+      // Resolve styleId for each rule once
+      const resolvedRules = rules.map(r => ({
+        regex: r.regex,
+        level: r.level,
+        styleId: resolveHeadingStyleId(stylesXml, r.level)
+      }));
 
       const results = [];
 
       docXml = docXml.replace(/<w:p[\s>][\s\S]*?<\/w:p>/g, paraXml => {
-        // Extract all <w:t> text content
         const textParts = [];
         const tRegex = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
         let m;
@@ -373,14 +476,15 @@
         const text = textParts.join('');
         if (!text.trim()) return paraXml;
 
-        regex.lastIndex = 0;
-        if (!regex.test(text)) return paraXml;
-
-        const oldStyleMatch = paraXml.match(/<w:pStyle[^>]+w:val="([^"]+)"/);
-        const oldStyle = oldStyleMatch ? oldStyleMatch[1] : '(default)';
-        results.push({ text: text.trim(), oldStyle });
-
-        return setParaStyle(paraXml, styleId);
+        for (const rule of resolvedRules) {
+          rule.regex.lastIndex = 0;
+          if (!rule.regex.test(text)) continue;
+          const oldStyleMatch = paraXml.match(/<w:pStyle[^>]+w:val="([^"]+)"/);
+          const oldStyle = oldStyleMatch ? oldStyleMatch[1] : '(default)';
+          results.push({ text: text.trim(), oldStyle, level: rule.level });
+          return setParaStyle(paraXml, rule.styleId);
+        }
+        return paraXml;
       });
 
       if (results.length === 0) return { results, blob: null };
