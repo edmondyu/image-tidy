@@ -333,6 +333,22 @@
       return paraXml.replace(/(<w:p(?:\s[^>]*)?>)/, `$1<w:pPr>${newPStyle}</w:pPr>`);
     }
 
+    function resolveHeadingStyleId(stylesXml, level) {
+      // Try exact English styleId e.g. "Heading1"
+      const exactId = 'Heading' + level;
+      if (new RegExp('w:styleId="' + exactId + '"').test(stylesXml)) return exactId;
+      // Search for a style whose w:name matches "heading N" (any locale)
+      const styleBlocks = [...stylesXml.matchAll(/<w:style\b[^>]*>[\s\S]*?<\/w:style>/g)];
+      for (const blk of styleBlocks) {
+        const nameM = blk[0].match(/<w:name[^>]+w:val="([^"]+)"/);
+        if (nameM && nameM[1].toLowerCase() === 'heading ' + level) {
+          const idM = blk[0].match(/w:styleId="([^"]+)"/);
+          if (idM) return idM[1];
+        }
+      }
+      return exactId; // fallback
+    }
+
     async function processDocx(file, regex, level) {
       const zip = await JSZip.loadAsync(await file.arrayBuffer());
 
@@ -340,7 +356,12 @@
       if (!docEntry) throw new Error('Not a valid DOCX file (missing word/document.xml).');
 
       let docXml = await docEntry.async('string');
-      const styleId = 'Heading' + level;
+
+      // Resolve the actual styleId for the requested heading level
+      const stylesEntry = zip.file('word/styles.xml');
+      const stylesXml = stylesEntry ? await stylesEntry.async('string') : '';
+      const styleId = resolveHeadingStyleId(stylesXml, level);
+
       const results = [];
 
       docXml = docXml.replace(/<w:p[\s>][\s\S]*?<\/w:p>/g, paraXml => {
