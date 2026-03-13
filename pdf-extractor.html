@@ -965,14 +965,17 @@
               cache[p.name] = await new Promise(resolve => page.objs.get(p.name, resolve));
           }
 
-          // Build page-space bounding box for each image placement
+          // Build page-space bounding box for each image placement.
+          // Uses all 4 corners of the unit square so rotated images are handled correctly.
           const images = [];
           for (const p of rawPlacements) {
             const imgData = p.name ? cache[p.name] : p.inlineData;
             if (!imgData || !imgData.width || !imgData.height) continue;
-            const [a,,,d,e,f] = p.ctm;
-            const x = Math.min(e, e+a), y = Math.min(f, f+d);
-            const w = Math.abs(a), h = Math.abs(d);
+            const [a,b,c,d,e,f] = p.ctm;
+            const xs = [e, e+a, e+c, e+a+c];
+            const ys = [f, f+b, f+d, f+b+d];
+            const x = Math.min(...xs), y = Math.min(...ys);
+            const w = Math.max(...xs) - x, h = Math.max(...ys) - y;
             if (w < 1 || h < 1) continue;
             images.push({ imgData, x, y, w, h });
           }
