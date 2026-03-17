@@ -850,21 +850,25 @@
       if (tiles.length !== xClusters.length * yClusters.length) return null;
 
       // Accumulate pixel offsets per column and row
+      // Use effective (post-rotation) dimensions for layout
+      function effW(t) { const r = ctmToCanvasRotDeg(t.ctm); return (r===90||r===-90) ? t.imgData.height : t.imgData.width; }
+      function effH(t) { const r = ctmToCanvasRotDeg(t.ctm); return (r===90||r===-90) ? t.imgData.width : t.imgData.height; }
+
       const xOff = new Array(xClusters.length).fill(0);
       for (let ci = 1; ci < xClusters.length; ci++) {
         const t = tiles.find(t => Math.abs(t.x - xClusters[ci-1].rep) <= tol);
-        xOff[ci] = xOff[ci-1] + (t ? t.imgData.width : 0);
+        xOff[ci] = xOff[ci-1] + (t ? effW(t) : 0);
       }
       const yOff = new Array(yClusters.length).fill(0);
       for (let ri = 1; ri < yClusters.length; ri++) {
         const t = tiles.find(t => Math.abs(t.y - yClusters[ri-1].rep) <= tol);
-        yOff[ri] = yOff[ri-1] + (t ? t.imgData.height : 0);
+        yOff[ri] = yOff[ri-1] + (t ? effH(t) : 0);
       }
 
       const lastXTile = tiles.find(t => Math.abs(t.x - xClusters[xClusters.length-1].rep) <= tol);
       const lastYTile = tiles.find(t => Math.abs(t.y - yClusters[yClusters.length-1].rep) <= tol);
-      const totalW = xOff[xClusters.length-1] + (lastXTile ? lastXTile.imgData.width : 0);
-      const totalH = yOff[yClusters.length-1] + (lastYTile ? lastYTile.imgData.height : 0);
+      const totalW = xOff[xClusters.length-1] + (lastXTile ? effW(lastXTile) : 0);
+      const totalH = yOff[yClusters.length-1] + (lastYTile ? effH(lastYTile) : 0);
 
       const canvas = document.createElement("canvas");
       canvas.width = totalW; canvas.height = totalH;
@@ -875,14 +879,49 @@
         const ci = xClusters.findIndex(c => Math.abs(c.rep - tile.x) <= tol);
         const ri = yClusters.findIndex(c => Math.abs(c.rep - tile.y) <= tol);
         if (ci < 0 || ri < 0) return null;
-        const tc = document.createElement("canvas");
-        tc.width = tile.imgData.width; tc.height = tile.imgData.height;
-        tc.getContext("2d").putImageData(
-          new ImageData(toRGBA(tile.imgData), tile.imgData.width, tile.imgData.height), 0, 0
-        );
+        const tc = tileToCanvas(tile);
         ctx.drawImage(tc, xOff[ci], yOff[ri]);
       }
       return canvas;
+    }
+
+    // Returns the canvas rotation (degrees) needed to correct for a CTM rotation.
+    // Analysis: for CTM [a,b,c,d,...], na=a/||(a,b)|| determines orientation.
+    // When na≈0 and nb<0 (b<0): image x-axis maps downward on screen → 90° CW corrects.
+    // When na≈0 and nb>0 (b>0): image x-axis maps upward on screen → 90° CCW corrects.
+    // When na<0 and nb≈0 (a<0): image is horizontally flipped + vertical flip → 180°.
+    function ctmToCanvasRotDeg(ctm) {
+      const [a, b] = ctm;
+      const scaleX = Math.sqrt(a*a + b*b);
+      if (scaleX < 1e-6) return 0;
+      const na = a / scaleX, nb = b / scaleX;
+      if (Math.abs(na) < 0.1) {
+        if (nb < -0.1) return 90;
+        if (nb > 0.1)  return -90;
+      } else if (na < -0.1 && Math.abs(nb) < 0.1) {
+        return 180;
+      }
+      return 0;
+    }
+
+    // Creates a canvas from a tile's raw imgData with CTM rotation applied.
+    function tileToCanvas(tile) {
+      const { imgData, ctm } = tile;
+      const rawW = imgData.width, rawH = imgData.height;
+      const src = document.createElement("canvas");
+      src.width = rawW; src.height = rawH;
+      src.getContext("2d").putImageData(new ImageData(toRGBA(imgData), rawW, rawH), 0, 0);
+      const rotDeg = ctmToCanvasRotDeg(ctm);
+      if (rotDeg === 0) return src;
+      const swap = (rotDeg === 90 || rotDeg === -90);
+      const out = document.createElement("canvas");
+      out.width = swap ? rawH : rawW;
+      out.height = swap ? rawW : rawH;
+      const ctx = out.getContext("2d");
+      ctx.translate(out.width / 2, out.height / 2);
+      ctx.rotate(rotDeg * Math.PI / 180);
+      ctx.drawImage(src, -rawW / 2, -rawH / 2);
+      return out;
     }
 
     // Convert pdf.js imgData (various pixel formats) to RGBA Uint8ClampedArray
@@ -977,7 +1016,7 @@
             const x = Math.min(...xs), y = Math.min(...ys);
             const w = Math.max(...xs) - x, h = Math.max(...ys) - y;
             if (w < 1 || h < 1) continue;
-            images.push({ imgData, x, y, w, h });
+            images.push({ imgData, x, y, w, h, ctm: p.ctm });
           }
 
           // Group adjacent tiles and stitch them together
@@ -997,11 +1036,7 @@
               // Single image or stitching failed — save tiles individually
               for (const tile of group) {
                 if (tile.imgData.width < 50 || tile.imgData.height < 50) continue;
-                const c = document.createElement("canvas");
-                c.width = tile.imgData.width; c.height = tile.imgData.height;
-                c.getContext("2d").putImageData(
-                  new ImageData(toRGBA(tile.imgData), tile.imgData.width, tile.imgData.height), 0, 0
-                );
+                const c = tileToCanvas(tile);
                 const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.92));
                 zip.file(`${baseName}_p${String(pageNum).padStart(3,"0")}_img${String(++pageImgIdx).padStart(2,"0")}.jpg`,
                          await blob.arrayBuffer());
