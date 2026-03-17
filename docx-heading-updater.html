@@ -445,7 +445,23 @@
           if (idM) return idM[1];
         }
       }
-      return exactId;
+      return null; // not found — caller must inject
+    }
+
+    // Minimal OOXML heading style definition to inject when none exists in the document.
+    function buildHeadingStyleXml(level) {
+      const outlineLvl = level - 1;
+      const sz = [32, 26, 24, 22, 20, 18][level - 1] || 24;
+      return '<w:style w:type="paragraph" w:styleId="Heading' + level + '">' +
+        '<w:name w:val="heading ' + level + '"/>' +
+        '<w:basedOn w:val="Normal"/>' +
+        '<w:next w:val="Normal"/>' +
+        '<w:uiPriority w:val="9"/>' +
+        '<w:qFormat/>' +
+        '<w:pPr><w:keepNext/><w:spacing w:before="240" w:after="0"/>' +
+        '<w:outlineLvl w:val="' + outlineLvl + '"/></w:pPr>' +
+        '<w:rPr><w:b/><w:sz w:val="' + sz + '"/><w:szCs w:val="' + sz + '"/></w:rPr>' +
+        '</w:style>';
     }
 
     async function processDocx(file, rules) {
@@ -457,14 +473,25 @@
       let docXml = await docEntry.async('string');
 
       const stylesEntry = zip.file('word/styles.xml');
-      const stylesXml = stylesEntry ? await stylesEntry.async('string') : '';
+      let stylesXml = stylesEntry ? await stylesEntry.async('string') : '';
 
-      // Resolve styleId for each rule once
+      // Resolve styleId for each rule; inject a definition when the heading style is absent.
       const resolvedRules = rules.map(r => ({
         regex: r.regex,
         level: r.level,
-        styleId: resolveHeadingStyleId(stylesXml, r.level)
+        styleId: resolveHeadingStyleId(stylesXml, r.level) || ('Heading' + r.level)
       }));
+
+      // Inject any missing heading style definitions into styles.xml
+      let stylesChanged = false;
+      for (const rule of resolvedRules) {
+        if (!new RegExp('w:styleId="' + rule.styleId + '"').test(stylesXml)) {
+          const inject = buildHeadingStyleXml(rule.level);
+          stylesXml = stylesXml.replace(/<\/w:styles>/, inject + '</w:styles>');
+          stylesChanged = true;
+        }
+      }
+      if (stylesChanged) zip.file('word/styles.xml', stylesXml, { compression: 'DEFLATE' });
 
       const results = [];
 
