@@ -1,6 +1,6 @@
 # ebook Publishing Toolbox
 
-**Version: v1.0.0**
+**Version: v1.1.0**
 
 Professional tools for **ebook creation, conversion, and publishing** — all processing happens **entirely in your browser**. No server uploads, no data transmission, completely privacy-friendly and secure.
 
