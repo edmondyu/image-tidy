@@ -292,7 +292,7 @@
     async function deflate(data) {
       const cs = new CompressionStream('deflate');
       const w = cs.writable.getWriter();
-      w.write(data); w.close();
+      await w.write(data); await w.close();
       const chunks = [];
       const r = cs.readable.getReader();
       while (true) {
@@ -342,7 +342,7 @@
         page.node.delete(PDFName.of('Thumb'));
         // Replace the thumbnail stream object with null so it takes no space on save
         if (thumbVal && typeof thumbVal.objectNumber === 'number') {
-          try { pdfDoc.context.assign(thumbVal, PDFNull.of()); } catch { /* ignore */ }
+          try { pdfDoc.context.assign(thumbVal, PDFNull); } catch { /* ignore */ }
         }
         count++;
       }
@@ -526,10 +526,12 @@
             // Try grayscale FlateDecode if the image is effectively grayscale
             let useGray = false;
             let grayBytes = null;
-            if (isGrayscaleCanvas(canvas)) {
-              grayBytes = await deflate(extractGrayBytes(canvas));
-              if (grayBytes.length < jpegBytes.length) useGray = true;
-            }
+            try {
+              if (isGrayscaleCanvas(canvas)) {
+                grayBytes = await deflate(extractGrayBytes(canvas));
+                if (grayBytes.length < jpegBytes.length) useGray = true;
+              }
+            } catch { /* gray path failed — fall back to JPEG */ }
 
             const bestBytes = useGray ? grayBytes : jpegBytes;
 
