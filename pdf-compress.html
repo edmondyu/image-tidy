@@ -24,12 +24,8 @@
       margin-bottom: 1.5rem;
     }
     button {
-      cursor: pointer;
-      border: none;
-      border-radius: 6px;
-      padding: 0.6rem 1.1rem;
-      font-size: 0.95rem;
-      margin-right: 0.5rem;
+      cursor: pointer; border: none; border-radius: 6px;
+      padding: 0.6rem 1.1rem; font-size: 0.95rem; margin-right: 0.5rem;
     }
     button.primary { background: #50e3c2; color: #131313; }
     button.primary:hover:not(:disabled) { background: #3dd4b3; }
@@ -38,28 +34,25 @@
     button:disabled { opacity: 0.5; cursor: default; }
     label.field-label { color: #50e3c2; font-size: 0.9rem; display: block; margin-bottom: 0.4rem; }
     select, input[type="number"] {
-      padding: 0.5rem 0.75rem;
-      border-radius: 6px;
-      border: 1px solid #3a3a3a;
-      background: #2a2a2a;
-      color: #f9f9f9;
-      font-size: 0.9rem;
+      padding: 0.5rem 0.75rem; border-radius: 6px;
+      border: 1px solid #3a3a3a; background: #2a2a2a;
+      color: #f9f9f9; font-size: 0.9rem; width: 100%; box-sizing: border-box;
     }
     select:focus, input[type="number"]:focus { outline: 2px solid #50e3c2; border-color: transparent; }
     .field-group { margin-bottom: 1rem; }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
     @media (max-width: 600px) { .two-col { grid-template-columns: 1fr; } }
     .hint { font-size: 0.85rem; color: #9ca3af; margin-top: 0.3rem; }
+    .notice {
+      font-size: 0.85rem; color: #6ee7b7;
+      background: #064e3b; border: 1px solid #10b981;
+      border-radius: 6px; padding: 0.6rem 0.9rem; margin-bottom: 1rem;
+    }
     a.back { display: inline-block; margin-bottom: 1rem; font-size: 0.9rem; text-decoration: none; color: #50e3c2; }
     a.back:hover { color: #3dd4b3; }
     .drop-zone {
-      border: 2px dashed #3a3a3a;
-      border-radius: 8px;
-      padding: 2rem;
-      text-align: center;
-      transition: all 0.2s;
-      background: #2a2a2a;
-      cursor: pointer;
+      border: 2px dashed #3a3a3a; border-radius: 8px;
+      padding: 2rem; text-align: center; background: #2a2a2a; cursor: pointer;
     }
     .drop-zone.drag-over { border-color: #50e3c2; background: #1a3a35; }
     .drop-zone.has-files { border-color: #10b981; background: #064e3b; }
@@ -69,8 +62,8 @@
     .drop-zone input[type="file"] { display: none; }
     .browse-btn {
       background: #3a3a3a; color: #f9f9f9; padding: 0.5rem 1rem;
-      border-radius: 6px; cursor: pointer; display: inline-block; font-size: 0.9rem;
-      margin-top: 0.75rem;
+      border-radius: 6px; cursor: pointer; display: inline-block;
+      font-size: 0.9rem; margin-top: 0.75rem;
     }
     .browse-btn:hover { background: #4a4a4a; }
     .file-list { margin-top: 1rem; }
@@ -79,33 +72,34 @@
       padding: 0.4rem 0.6rem; border-radius: 6px; background: #2a2a2a;
       margin-bottom: 0.3rem; font-size: 0.88rem;
     }
-    .file-item .fname { color: #f9f9f9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
+    .file-item .fname { color: #f9f9f9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 65%; }
     .file-item .fsize { color: #9ca3af; font-size: 0.82rem; }
     .file-item .fremove { background: none; border: none; color: #f87171; cursor: pointer; font-size: 1rem; padding: 0 0.25rem; margin: 0; }
     .progress-wrap { background: #2a2a2a; border-radius: 8px; overflow: hidden; margin: 0.75rem 0; height: 10px; }
-    .progress-bar { height: 100%; background: #50e3c2; transition: width 0.2s; width: 0%; }
-    .status-msg { font-size: 0.9rem; color: #9ca3af; margin-top: 0.5rem; min-height: 1.2em; }
+    .progress-bar { height: 100%; background: #50e3c2; transition: width 0.15s; width: 0%; }
+    .status-msg { font-size: 0.88rem; color: #9ca3af; margin-top: 0.4rem; min-height: 1.2em; }
     .result-row {
-      display: flex; align-items: center; justify-content: space-between;
+      display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
       padding: 0.45rem 0.6rem; border-radius: 6px; background: #2a2a2a;
       margin-bottom: 0.3rem; font-size: 0.88rem;
     }
-    .result-row .rname { color: #f9f9f9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 50%; }
-    .result-row .rsizes { color: #9ca3af; font-size: 0.82rem; }
-    .result-row .rratio { color: #50e3c2; font-weight: 600; font-size: 0.82rem; }
-    .error-msg { color: #f87171; font-size: 0.88rem; margin-top: 0.4rem; }
+    .result-row .rname { color: #f9f9f9; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .result-row .rsizes { color: #9ca3af; font-size: 0.82rem; white-space: nowrap; }
+    .result-row .rratio { font-weight: 600; font-size: 0.82rem; white-space: nowrap; }
+    .ratio-good { color: #50e3c2; }
+    .ratio-neutral { color: #9ca3af; }
+    .result-row .rimgs { font-size: 0.78rem; color: #6b7280; white-space: nowrap; }
+    .error-msg { color: #f87171; font-size: 0.88rem; margin-top: 0.6rem; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 </head>
 <body>
   <a class="back" href="index.html">← Back to Toolbox</a>
 
   <h1>PDF Compressor</h1>
   <p class="subtitle">
-    Re-render PDF pages at a reduced resolution and JPEG quality to produce smaller files.
-    Upload one or more PDFs and download all compressed results as a ZIP.
+    Compress embedded images inside PDFs while preserving all text, fonts, hyperlinks, bookmarks, and vector graphics.
   </p>
 
   <!-- Step 1 -->
@@ -124,22 +118,19 @@
   <!-- Step 2 -->
   <div class="card">
     <h2>2. Compression Settings</h2>
+    <div class="notice">
+      Only embedded images are recompressed. Text, fonts, vector graphics, hyperlinks, bookmarks, and annotations are preserved exactly as-is.
+    </div>
     <div class="two-col">
       <div class="field-group">
-        <label class="field-label" for="dpiSelect">Render resolution</label>
-        <select id="dpiSelect">
-          <option value="72">72 DPI — smallest file</option>
-          <option value="96">96 DPI — small file</option>
-          <option value="150" selected>150 DPI — balanced</option>
-          <option value="200">200 DPI — high quality</option>
-          <option value="300">300 DPI — near-original</option>
-        </select>
-        <div class="hint">Lower DPI = smaller output, less detail.</div>
+        <label class="field-label" for="qualityInput">JPEG quality (%)</label>
+        <input type="number" id="qualityInput" value="82" min="1" max="100" />
+        <div class="hint">Lower = smaller file, more compression artefacts.</div>
       </div>
       <div class="field-group">
-        <label class="field-label" for="qualityInput">JPEG quality (%)</label>
-        <input type="number" id="qualityInput" value="82" min="1" max="100" style="width:100%;box-sizing:border-box;" />
-        <div class="hint">1–100. Lower = smaller file, more compression artefacts.</div>
+        <label class="field-label" for="maxDimInput">Max image dimension (px)</label>
+        <input type="number" id="maxDimInput" value="" placeholder="No limit" min="64" />
+        <div class="hint">Downsample images wider/taller than this. Leave blank to keep original dimensions.</div>
       </div>
     </div>
   </div>
@@ -165,18 +156,14 @@
   </div>
 
   <script>
-    // PDF.js worker
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js';
+    const { PDFDocument, PDFName, PDFNumber, PDFRawStream } = PDFLib;
 
-    const { jsPDF } = window.jspdf;
-
-    let selectedFiles = [];   // File objects
-    let resultBlobs = [];     // { name, originalSize, compressedBlob }
+    let selectedFiles = [];
+    let resultBlobs = [];
 
     // ── Drop zone ─────────────────────────────────────────────────────────────
-    const dropZone   = document.getElementById('dropZone');
-    const fileInput  = document.getElementById('fileInput');
+    const dropZone    = document.getElementById('dropZone');
+    const fileInput   = document.getElementById('fileInput');
     const compressBtn = document.getElementById('compressBtn');
 
     function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
@@ -188,10 +175,7 @@
       dropZone.classList.remove('drag-over');
       addFiles([...e.dataTransfer.files].filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')));
     });
-    fileInput.addEventListener('change', () => {
-      addFiles([...fileInput.files]);
-      fileInput.value = '';
-    });
+    fileInput.addEventListener('change', () => { addFiles([...fileInput.files]); fileInput.value = ''; });
 
     function addFiles(files) {
       files.forEach(f => {
@@ -200,14 +184,11 @@
       renderFileList();
     }
 
-    function removeFile(idx) {
-      selectedFiles.splice(idx, 1);
-      renderFileList();
-    }
+    function removeFile(idx) { selectedFiles.splice(idx, 1); renderFileList(); }
 
     function renderFileList() {
       const list = document.getElementById('fileList');
-      if (selectedFiles.length === 0) {
+      if (!selectedFiles.length) {
         list.innerHTML = '';
         dropZone.classList.remove('has-files');
         compressBtn.disabled = true;
@@ -219,20 +200,21 @@
         '<div class="file-item">' +
         '<span class="fname">' + escHtml(f.name) + '</span>' +
         '<span class="fsize">' + fmtSize(f.size) + '</span>' +
-        '<button class="fremove" data-idx="' + i + '" title="Remove">✕</button>' +
+        '<button class="fremove" data-idx="' + i + '">✕</button>' +
         '</div>'
       ).join('');
       list.querySelectorAll('.fremove').forEach(btn =>
-        btn.addEventListener('click', () => removeFile(parseInt(btn.dataset.idx)))
+        btn.addEventListener('click', () => removeFile(+btn.dataset.idx))
       );
     }
 
     // ── Compress ──────────────────────────────────────────────────────────────
     compressBtn.addEventListener('click', async () => {
-      if (selectedFiles.length === 0) return;
+      if (!selectedFiles.length) return;
 
-      const dpi     = parseInt(document.getElementById('dpiSelect').value, 10);
-      const quality = Math.min(100, Math.max(1, parseInt(document.getElementById('qualityInput').value, 10) || 82)) / 100;
+      const quality = Math.min(100, Math.max(1, parseInt(document.getElementById('qualityInput').value) || 82)) / 100;
+      const maxDimRaw = parseInt(document.getElementById('maxDimInput').value);
+      const maxDim = maxDimRaw >= 64 ? maxDimRaw : null;
 
       compressBtn.disabled = true;
       resultBlobs = [];
@@ -240,59 +222,28 @@
       document.getElementById('resultsSection').style.display = 'none';
       document.getElementById('errorMsg').style.display = 'none';
 
-      const progressBar = document.getElementById('progressBar');
-      const statusMsg   = document.getElementById('statusMsg');
-
       try {
         for (let fi = 0; fi < selectedFiles.length; fi++) {
           const file = selectedFiles[fi];
-          setStatus(`Processing ${file.name} (${fi + 1}/${selectedFiles.length})…`, (fi / selectedFiles.length) * 100);
+          setStatus(`Reading ${file.name}…`, (fi / selectedFiles.length) * 100);
 
           const arrayBuffer = await file.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
-          const scale = dpi / 72;  // PDF.js default viewport is 72 DPI
+          const onProgress = (msg, pct) => setStatus(
+            `[${fi + 1}/${selectedFiles.length}] ${file.name} — ${msg}`,
+            (fi / selectedFiles.length + pct / selectedFiles.length) * 100
+          );
 
-          const doc = new jsPDF({ unit: 'pt', compress: true });
-          let firstPage = true;
-
-          for (let p = 1; p <= pdf.numPages; p++) {
-            const page     = await pdf.getPage(p);
-            const viewport = page.getViewport({ scale });
-            const canvas   = document.createElement('canvas');
-            canvas.width   = Math.round(viewport.width);
-            canvas.height  = Math.round(viewport.height);
-            const ctx      = canvas.getContext('2d');
-            await page.render({ canvasContext: ctx, viewport }).promise;
-
-            const imgData = canvas.toDataURL('image/jpeg', quality);
-
-            // Page dimensions in points (72 DPI base)
-            const ptW = viewport.width  / scale;
-            const ptH = viewport.height / scale;
-
-            if (firstPage) {
-              doc.internal.pageSize.width  = ptW;
-              doc.internal.pageSize.height = ptH;
-              firstPage = false;
-            } else {
-              doc.addPage([ptW, ptH]);
-            }
-            doc.addImage(imgData, 'JPEG', 0, 0, ptW, ptH, undefined, 'FAST');
-
-            const pageProgress = ((fi + p / pdf.numPages) / selectedFiles.length) * 100;
-            setStatus(`${file.name} — page ${p}/${pdf.numPages}`, pageProgress);
-          }
-
-          const pdfBytes = doc.output('arraybuffer');
-          const compressedBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+          const { bytes, compressed, skipped } = await compressPDF(arrayBuffer, quality, maxDim, onProgress);
+          const blob = new Blob([bytes], { type: 'application/pdf' });
           const outName = file.name.replace(/\.pdf$/i, '') + '_compressed.pdf';
-          resultBlobs.push({ name: outName, originalSize: file.size, compressedBlob });
+          resultBlobs.push({ name: outName, originalSize: file.size, blob, compressed, skipped });
         }
 
         setStatus('Done.', 100);
         showResults();
       } catch (e) {
         showError('Error: ' + (e.message || String(e)));
+        console.error(e);
       } finally {
         compressBtn.disabled = false;
       }
@@ -306,13 +257,16 @@
     function showResults() {
       const section = document.getElementById('resultsSection');
       const list    = document.getElementById('resultList');
-      list.innerHTML = resultBlobs.map((r, i) => {
-        const ratio = ((1 - r.compressedBlob.size / r.originalSize) * 100).toFixed(1);
-        const sign  = parseFloat(ratio) >= 0 ? '-' : '+';
+      list.innerHTML = resultBlobs.map(r => {
+        const saving = ((1 - r.blob.size / r.originalSize) * 100).toFixed(1);
+        const ratioClass = parseFloat(saving) > 0 ? 'ratio-good' : 'ratio-neutral';
+        const sign = parseFloat(saving) >= 0 ? '-' : '+';
         return '<div class="result-row">' +
           '<span class="rname">' + escHtml(r.name) + '</span>' +
-          '<span class="rsizes">' + fmtSize(r.originalSize) + ' → ' + fmtSize(r.compressedBlob.size) + '</span>' +
-          '<span class="rratio">' + sign + Math.abs(ratio) + '%</span>' +
+          '<span class="rsizes">' + fmtSize(r.originalSize) + ' → ' + fmtSize(r.blob.size) + '</span>' +
+          '<span class="rratio ' + ratioClass + '">' + sign + Math.abs(saving) + '%</span>' +
+          '<span class="rimgs">' + r.compressed + ' img' + (r.compressed !== 1 ? 's' : '') + ' compressed' +
+            (r.skipped ? ', ' + r.skipped + ' skipped' : '') + '</span>' +
           '</div>';
       }).join('');
       section.style.display = '';
@@ -322,31 +276,228 @@
     // ── Download ZIP ──────────────────────────────────────────────────────────
     document.getElementById('downloadZipBtn').addEventListener('click', async () => {
       const zip = new JSZip();
-      for (const r of resultBlobs) {
-        zip.file(r.name, r.compressedBlob);
-      }
+      for (const r of resultBlobs) zip.file(r.name, r.blob);
       const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
       a.download = 'compressed_pdfs.zip';
       a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
     });
+
+    // ── Core: image-only compression preserving text layer ───────────────────
+
+    // Decompress zlib/deflate stream (PDF FlateDecode)
+    async function inflate(data) {
+      for (const fmt of ['deflate', 'deflate-raw']) {
+        try {
+          const ds = new DecompressionStream(fmt);
+          const w = ds.writable.getWriter();
+          w.write(data.slice(0)); w.close();
+          const r = ds.readable.getReader();
+          const chunks = [];
+          while (true) {
+            const { value, done } = await r.read();
+            if (done) break;
+            chunks.push(value);
+          }
+          const len = chunks.reduce((s, c) => s + c.length, 0);
+          const out = new Uint8Array(len);
+          let off = 0;
+          for (const c of chunks) { out.set(c, off); off += c.length; }
+          return out;
+        } catch { /* try next format */ }
+      }
+      return null;
+    }
+
+    // Decode a Blob to an HTMLImageElement
+    function blobToImage(blob) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(blob);
+        img.onload  = () => { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image decode failed')); };
+        img.src = url;
+      });
+    }
+
+    // Re-encode an image blob as JPEG at the given quality, optionally downsampling
+    async function reencodeAsJpeg(sourceBlob, origW, origH, maxDim, quality) {
+      const img = await blobToImage(sourceBlob);
+      let w = origW, h = origH;
+      if (maxDim && Math.max(w, h) > maxDim) {
+        const s = maxDim / Math.max(w, h);
+        w = Math.round(w * s); h = Math.round(h * s);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', quality));
+      return { jpegBytes: new Uint8Array(await blob.arrayBuffer()), width: w, height: h };
+    }
+
+    function getNum(dict, key) {
+      const v = dict.lookup(PDFName.of(key));
+      if (!v) return null;
+      if (typeof v.numberValue === 'number') return v.numberValue;
+      if (typeof v.asNumber === 'function') return v.asNumber();
+      return null;
+    }
+
+    function getFilterName(dict) {
+      const f = dict.lookup(PDFName.of('Filter'));
+      if (!f) return null;
+      if (f.encodedName) return f.encodedName;         // single PDFName
+      if (f.array) return f.array[0]?.encodedName || null; // PDFArray with one entry
+      return null;
+    }
+
+    async function compressPDF(arrayBuffer, quality, maxDim, onProgress) {
+      onProgress('parsing…', 0);
+      const pdfDoc = await PDFDocument.load(arrayBuffer, {
+        ignoreEncryption: true,
+        updateMetadata: false,
+      });
+
+      const processedRefs = new Set();
+      let compressed = 0, skipped = 0;
+      const pages = pdfDoc.getPages();
+
+      for (let pi = 0; pi < pages.length; pi++) {
+        onProgress(`page ${pi + 1}/${pages.length}`, (pi / pages.length) * 90);
+        const page = pages[pi];
+
+        const resources = page.node.Resources();
+        if (!resources) continue;
+
+        const xObjEntry = resources.lookup(PDFName.of('XObject'));
+        if (!xObjEntry) continue;
+
+        const xObjDict = pdfDoc.context.lookup(xObjEntry);
+        if (!xObjDict || typeof xObjDict.entries !== 'function') continue;
+
+        for (const [, ref] of xObjDict.entries()) {
+          const refKey = ref.toString();
+          if (processedRefs.has(refKey)) continue;
+          processedRefs.add(refKey);
+
+          let xObj;
+          try { xObj = pdfDoc.context.lookup(ref); } catch { continue; }
+          if (!(xObj instanceof PDFRawStream)) continue;
+
+          const dict = xObj.dict;
+
+          const subtype = dict.lookup(PDFName.of('Subtype'));
+          if (!subtype || subtype.encodedName !== '/Image') continue;
+
+          // Skip 1-bit mask images
+          const imageMask = dict.lookup(PDFName.of('ImageMask'));
+          if (imageMask?.toString() === 'true') continue;
+
+          const origW = getNum(dict, 'Width');
+          const origH = getNum(dict, 'Height');
+          if (!origW || !origH || origW < 32 || origH < 32) continue;
+
+          const filterName = getFilterName(dict);
+          let sourceBlob = null;
+
+          if (filterName === '/DCTDecode') {
+            // JPEG — raw bytes are already a valid JPEG file
+            sourceBlob = new Blob([xObj.contents], { type: 'image/jpeg' });
+
+          } else if (filterName === '/FlateDecode') {
+            // Zlib-compressed raw pixels. Skip if PNG predictor is in use (complex row filters).
+            const dp = dict.lookup(PDFName.of('DecodeParms'));
+            const predictor = dp ? getNum(dp, 'Predictor') : null;
+            if (predictor !== null && predictor >= 10) { skipped++; continue; }
+
+            const raw = await inflate(xObj.contents);
+            if (!raw) { skipped++; continue; }
+
+            const cs = dict.lookup(PDFName.of('ColorSpace'));
+            const csName = cs?.encodedName || '';
+            const bpc = getNum(dict, 'BitsPerComponent') || 8;
+            if (bpc !== 8) { skipped++; continue; }
+
+            let channels = 3;
+            if (csName === '/DeviceGray') channels = 1;
+            else if (csName === '/DeviceCMYK') { skipped++; continue; } // CMYK needs ICC conversion
+
+            const expectedLen = origW * origH * channels;
+            if (raw.length < expectedLen) { skipped++; continue; }
+
+            const rgba = new Uint8ClampedArray(origW * origH * 4);
+            if (channels === 3) {
+              for (let i = 0; i < origW * origH; i++) {
+                rgba[i*4]   = raw[i*3];
+                rgba[i*4+1] = raw[i*3+1];
+                rgba[i*4+2] = raw[i*3+2];
+                rgba[i*4+3] = 255;
+              }
+            } else { // grayscale
+              for (let i = 0; i < origW * origH; i++) {
+                rgba[i*4] = rgba[i*4+1] = rgba[i*4+2] = raw[i];
+                rgba[i*4+3] = 255;
+              }
+            }
+
+            const tmp = document.createElement('canvas');
+            tmp.width = origW; tmp.height = origH;
+            tmp.getContext('2d').putImageData(new ImageData(rgba, origW, origH), 0, 0);
+            sourceBlob = await new Promise(r => tmp.toBlob(r, 'image/png'));
+
+          } else {
+            skipped++; // JBIG2, JPEG2000, CCITTFax etc. — skip
+            continue;
+          }
+
+          if (!sourceBlob) { skipped++; continue; }
+
+          try {
+            const { jpegBytes, width: newW, height: newH } =
+              await reencodeAsJpeg(sourceBlob, origW, origH, maxDim, quality);
+
+            // Skip if we didn't actually reduce size and didn't resize
+            if (jpegBytes.length >= xObj.contents.length && newW === origW && newH === origH) {
+              skipped++;
+              continue;
+            }
+
+            // Update the image dictionary
+            dict.set(PDFName.of('Width'),            PDFNumber.of(newW));
+            dict.set(PDFName.of('Height'),           PDFNumber.of(newH));
+            dict.set(PDFName.of('ColorSpace'),       PDFName.of('DeviceRGB'));
+            dict.set(PDFName.of('BitsPerComponent'), PDFNumber.of(8));
+            dict.set(PDFName.of('Filter'),           PDFName.of('DCTDecode'));
+            dict.set(PDFName.of('Length'),           PDFNumber.of(jpegBytes.length));
+            dict.delete(PDFName.of('DecodeParms'));
+            dict.delete(PDFName.of('SMask'));  // transparency not preserved in JPEG
+            dict.delete(PDFName.of('Mask'));
+
+            // Replace the stream object at its indirect reference
+            pdfDoc.context.assign(ref, PDFRawStream.of(dict, jpegBytes));
+            compressed++;
+
+          } catch { skipped++; }
+        }
+      }
+
+      onProgress('saving…', 95);
+      const bytes = await pdfDoc.save({ useObjectStreams: false });
+      return { bytes, compressed, skipped };
+    }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     function showError(msg) {
       const el = document.getElementById('errorMsg');
-      el.textContent = msg;
-      el.style.display = '';
+      el.textContent = msg; el.style.display = '';
     }
-
-    function fmtSize(bytes) {
-      if (bytes < 1024) return bytes + ' B';
-      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-      return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    function fmtSize(b) {
+      if (b < 1024) return b + ' B';
+      if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+      return (b / 1048576).toFixed(2) + ' MB';
     }
-
     function escHtml(s) {
       return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
