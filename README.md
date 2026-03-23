@@ -91,7 +91,18 @@ Convert PDF files to compressed JPG images. Supports multi-page export and autom
 - ✅ **Download all as ZIP** — convenient bulk download
 - ✅ **Drag-and-drop UI** — easy PDF uploads
 
-### 8. Royalty Reporting (Multi-platform)
+### 8. PDF Compressor
+Re-render PDF pages at a reduced resolution and JPEG quality to produce smaller files. Upload multiple PDFs and download all results as a ZIP.
+
+**Features:**
+- ✅ **Batch processing** — compress multiple PDFs in one run
+- ✅ **Configurable DPI** — 72 / 96 / 150 / 200 / 300 DPI render resolution
+- ✅ **Configurable JPEG quality** — 1–100% quality slider
+- ✅ **Per-file size report** — shows original vs compressed size and reduction %
+- ✅ **ZIP download** — all compressed PDFs bundled into one ZIP
+- ✅ **Drag-and-drop UI** — easy multi-file PDF uploads
+
+### 9. Royalty Reporting (Multi-platform)
 Consolidate royalty reports from multiple platforms into unified summaries.
 
 **Features:**
