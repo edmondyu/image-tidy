@@ -156,7 +156,7 @@
   </div>
 
   <script>
-    const { PDFDocument, PDFName, PDFNumber, PDFRawStream } = PDFLib;
+    const { PDFDocument, PDFName, PDFNumber, PDFRawStream, PDFNull } = PDFLib;
 
     let selectedFiles = [];
     let resultBlobs = [];
@@ -233,10 +233,10 @@
             (fi / selectedFiles.length + pct / selectedFiles.length) * 100
           );
 
-          const { bytes, compressed, skipped } = await compressPDF(arrayBuffer, quality, maxDim, onProgress);
+          const { bytes, compressed, skipped, thumbsRemoved } = await compressPDF(arrayBuffer, quality, maxDim, onProgress);
           const blob = new Blob([bytes], { type: 'application/pdf' });
           const outName = file.name.replace(/\.pdf$/i, '') + '_compressed.pdf';
-          resultBlobs.push({ name: outName, originalSize: file.size, blob, compressed, skipped });
+          resultBlobs.push({ name: outName, originalSize: file.size, blob, compressed, skipped, thumbsRemoved });
         }
 
         setStatus('Done.', 100);
@@ -266,7 +266,8 @@
           '<span class="rsizes">' + fmtSize(r.originalSize) + ' → ' + fmtSize(r.blob.size) + '</span>' +
           '<span class="rratio ' + ratioClass + '">' + sign + Math.abs(saving) + '%</span>' +
           '<span class="rimgs">' + r.compressed + ' img' + (r.compressed !== 1 ? 's' : '') + ' compressed' +
-            (r.skipped ? ', ' + r.skipped + ' skipped' : '') + '</span>' +
+            (r.skipped ? ', ' + r.skipped + ' skipped' : '') +
+            (r.thumbsRemoved ? ', ' + r.thumbsRemoved + ' thumb' + (r.thumbsRemoved !== 1 ? 's' : '') + ' removed' : '') + '</span>' +
           '</div>';
       }).join('');
       section.style.display = '';
@@ -286,6 +287,67 @@
     });
 
     // ── Core: image-only compression preserving text layer ───────────────────
+
+    // Zlib-compress a Uint8Array (produces PDF FlateDecode-compatible output)
+    async function deflate(data) {
+      const cs = new CompressionStream('deflate');
+      const w = cs.writable.getWriter();
+      w.write(data); w.close();
+      const chunks = [];
+      const r = cs.readable.getReader();
+      while (true) {
+        const { value, done } = await r.read();
+        if (done) break;
+        chunks.push(value);
+      }
+      const len = chunks.reduce((s, c) => s + c.length, 0);
+      const out = new Uint8Array(len);
+      let off = 0;
+      for (const c of chunks) { out.set(c, off); off += c.length; }
+      return out;
+    }
+
+    // Sample ~1 000 pixels to decide if a canvas is effectively grayscale
+    function isGrayscaleCanvas(canvas) {
+      const { data, width, height } = canvas.getContext('2d')
+        .getImageData(0, 0, width, height);
+      const total = width * height;
+      const step  = Math.max(1, Math.floor(total / 1000));
+      for (let i = 0; i < total; i += step) {
+        const r = data[i * 4], g = data[i * 4 + 1], b = data[i * 4 + 2];
+        if (Math.abs(r - g) > 8 || Math.abs(g - b) > 8) return false;
+      }
+      return true;
+    }
+
+    // Extract luminance-only bytes from a canvas (one byte per pixel)
+    function extractGrayBytes(canvas) {
+      const { data, width, height } = canvas.getContext('2d')
+        .getImageData(0, 0, width, height);
+      const gray = new Uint8Array(width * height);
+      for (let i = 0; i < gray.length; i++) {
+        gray[i] = Math.round(
+          0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2]
+        );
+      }
+      return gray;
+    }
+
+    // Remove /Thumb entries from all pages (frees thumbnail stream objects)
+    function removeThumbnails(pdfDoc) {
+      let count = 0;
+      for (const page of pdfDoc.getPages()) {
+        if (!page.node.has(PDFName.of('Thumb'))) continue;
+        const thumbVal = page.node.get(PDFName.of('Thumb'));
+        page.node.delete(PDFName.of('Thumb'));
+        // Replace the thumbnail stream object with null so it takes no space on save
+        if (thumbVal && typeof thumbVal.objectNumber === 'number') {
+          try { pdfDoc.context.assign(thumbVal, PDFNull.of()); } catch { /* ignore */ }
+        }
+        count++;
+      }
+      return count;
+    }
 
     // Decompress zlib/deflate stream (PDF FlateDecode)
     async function inflate(data) {
@@ -322,7 +384,8 @@
       });
     }
 
-    // Re-encode an image blob as JPEG at the given quality, optionally downsampling
+    // Render a source blob to a (possibly downsampled) canvas and re-encode as JPEG.
+    // Also returns the canvas so the caller can run grayscale detection.
     async function reencodeAsJpeg(sourceBlob, origW, origH, maxDim, quality) {
       const img = await blobToImage(sourceBlob);
       let w = origW, h = origH;
@@ -334,7 +397,7 @@
       canvas.width = w; canvas.height = h;
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
       const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', quality));
-      return { jpegBytes: new Uint8Array(await blob.arrayBuffer()), width: w, height: h };
+      return { jpegBytes: new Uint8Array(await blob.arrayBuffer()), width: w, height: h, canvas };
     }
 
     function getNum(dict, key) {
@@ -359,6 +422,8 @@
         ignoreEncryption: true,
         updateMetadata: false,
       });
+
+      const thumbsRemoved = removeThumbnails(pdfDoc);
 
       const processedRefs = new Set();
       let compressed = 0, skipped = 0;
@@ -455,11 +520,21 @@
           if (!sourceBlob) { skipped++; continue; }
 
           try {
-            const { jpegBytes, width: newW, height: newH } =
+            const { jpegBytes, width: newW, height: newH, canvas } =
               await reencodeAsJpeg(sourceBlob, origW, origH, maxDim, quality);
 
+            // Try grayscale FlateDecode if the image is effectively grayscale
+            let useGray = false;
+            let grayBytes = null;
+            if (isGrayscaleCanvas(canvas)) {
+              grayBytes = await deflate(extractGrayBytes(canvas));
+              if (grayBytes.length < jpegBytes.length) useGray = true;
+            }
+
+            const bestBytes = useGray ? grayBytes : jpegBytes;
+
             // Skip if we didn't actually reduce size and didn't resize
-            if (jpegBytes.length >= xObj.contents.length && newW === origW && newH === origH) {
+            if (bestBytes.length >= xObj.contents.length && newW === origW && newH === origH) {
               skipped++;
               continue;
             }
@@ -467,16 +542,23 @@
             // Update the image dictionary
             dict.set(PDFName.of('Width'),            PDFNumber.of(newW));
             dict.set(PDFName.of('Height'),           PDFNumber.of(newH));
-            dict.set(PDFName.of('ColorSpace'),       PDFName.of('DeviceRGB'));
             dict.set(PDFName.of('BitsPerComponent'), PDFNumber.of(8));
-            dict.set(PDFName.of('Filter'),           PDFName.of('DCTDecode'));
-            dict.set(PDFName.of('Length'),           PDFNumber.of(jpegBytes.length));
-            dict.delete(PDFName.of('DecodeParms'));
-            dict.delete(PDFName.of('SMask'));  // transparency not preserved in JPEG
+            dict.set(PDFName.of('Length'),           PDFNumber.of(bestBytes.length));
+            dict.delete(PDFName.of('SMask'));  // transparency not preserved in JPEG/gray
             dict.delete(PDFName.of('Mask'));
 
+            if (useGray) {
+              dict.set(PDFName.of('ColorSpace'), PDFName.of('DeviceGray'));
+              dict.set(PDFName.of('Filter'),     PDFName.of('FlateDecode'));
+              dict.delete(PDFName.of('DecodeParms'));
+            } else {
+              dict.set(PDFName.of('ColorSpace'), PDFName.of('DeviceRGB'));
+              dict.set(PDFName.of('Filter'),     PDFName.of('DCTDecode'));
+              dict.delete(PDFName.of('DecodeParms'));
+            }
+
             // Replace the stream object at its indirect reference
-            pdfDoc.context.assign(ref, PDFRawStream.of(dict, jpegBytes));
+            pdfDoc.context.assign(ref, PDFRawStream.of(dict, bestBytes));
             compressed++;
 
           } catch { skipped++; }
@@ -485,7 +567,7 @@
 
       onProgress('saving…', 95);
       const bytes = await pdfDoc.save({ useObjectStreams: false });
-      return { bytes, compressed, skipped };
+      return { bytes, compressed, skipped, thumbsRemoved };
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
