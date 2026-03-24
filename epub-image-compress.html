@@ -437,30 +437,35 @@
         const enableResize = enableResizeCheckbox.checked;
         const convertToJpg = convertToJpgCheckbox.checked;
 
-        // Compress each image
+        // Compress each image; track PNG/GIF/WEBP → JPEG conversions for OPF update
+        const mediaTypeChanges = new Map(); // zip path → new media-type
+        const EXT_MIME = { '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp',
+                           '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
         let processedCount = 0;
         for (const imageFile of imageFiles) {
           const imageData = await imageFile.file.async('blob');
+          const ext = imageFile.path.toLowerCase().substring(imageFile.path.lastIndexOf('.'));
+          // JSZip blobs often have empty .type; resolve from extension instead
+          const sourceMime = EXT_MIME[ext] || 'image/jpeg';
 
-          const compressedBlob = await compressImage(imageData, maxWidth, maxHeight, targetPercent, enableResize, convertToJpg);
+          const compressedBlob = await compressImage(imageData, maxWidth, maxHeight, targetPercent, enableResize, convertToJpg, sourceMime);
 
-          // Only change extension to .jpg if the image was actually re-encoded (not the original blob)
-          let outputPath = imageFile.path;
-          const wasReEncoded = compressedBlob !== imageData;
-          if (wasReEncoded && convertToJpg && !imageFile.path.toLowerCase().endsWith('.jpg') && !imageFile.path.toLowerCase().endsWith('.jpeg')) {
-            outputPath = imageFile.path.substring(0, imageFile.path.lastIndexOf('.')) + '.jpg';
+          // Keep the original path — never rename. If we converted to JPEG, record it so
+          // the OPF manifest can be updated (readers dispatch by media-type, not extension).
+          if (compressedBlob !== imageData && sourceMime !== 'image/jpeg' && convertToJpg) {
+            mediaTypeChanges.set(imageFile.path, 'image/jpeg');
           }
 
-          // Replace the image in the zip (with new path if converted to JPG)
-          if (outputPath !== imageFile.path) {
-            // Remove old file and add new one
-            zip.remove(imageFile.path);
-          }
-          zip.file(outputPath, compressedBlob, { compression: 'DEFLATE', compressionOptions: { level: 9 } });
+          zip.file(imageFile.path, compressedBlob, { compression: 'DEFLATE', compressionOptions: { level: 9 } });
 
           processedCount++;
           const percent = 30 + (processedCount / imageFiles.length) * 60;
           showProgress(`Compressed ${processedCount}/${imageFiles.length} images...`, percent);
+        }
+
+        // Patch OPF manifest media-type for any converted images
+        if (mediaTypeChanges.size > 0) {
+          await updateOpfMediaTypes(epubData, zip, mediaTypeChanges);
         }
 
         showProgress('Creating compressed EPUB...', 95);
@@ -596,13 +601,52 @@
       return false;
     }
 
+    // Update media-type attributes in the OPF manifest for converted images.
+    // Keeps original filenames intact — EPUB readers use media-type, not extension.
+    async function updateOpfMediaTypes(epubData, zip, mediaTypeChanges) {
+      try {
+        const containerFile = epubData.file('META-INF/container.xml');
+        if (!containerFile) return;
+        const containerXml = await containerFile.async('text');
+        const opfPathMatch = containerXml.match(/full-path="([^"]+)"/);
+        if (!opfPathMatch) return;
+
+        const opfPath = opfPathMatch[1];
+        const opfFile = zip.file(opfPath);
+        if (!opfFile) return;
+
+        const opfDir = opfPath.substring(0, opfPath.lastIndexOf('/') + 1); // e.g. "OEBPS/"
+        let opfXml = await opfFile.async('text');
+
+        for (const [zipPath, newMime] of mediaTypeChanges) {
+          // Convert absolute zip path to OPF-relative href
+          const relPath = zipPath.startsWith(opfDir) ? zipPath.slice(opfDir.length) : zipPath;
+          const filename = relPath.split('/').pop();
+          // Match any <item> whose href ends with the relative path or filename
+          opfXml = opfXml.replace(/<item([^>]+)>/g, (tag, attrs) => {
+            const hrefMatch = attrs.match(/href="([^"]+)"/);
+            if (!hrefMatch) return tag;
+            const href = hrefMatch[1];
+            if (href === relPath || href === filename || href.endsWith('/' + filename)) {
+              return tag.replace(/media-type="[^"]*"/, `media-type="${newMime}"`);
+            }
+            return tag;
+          });
+        }
+
+        zip.file(opfPath, opfXml);
+      } catch (e) {
+        console.warn('Could not update OPF manifest media-types:', e);
+      }
+    }
+
     function canvasToBlob(canvas, type, quality) {
       return new Promise((resolve, reject) => {
         canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), type, quality);
       });
     }
 
-    async function compressImage(blob, maxWidth, maxHeight, targetPercent, enableResize, convertToJpg) {
+    async function compressImage(blob, maxWidth, maxHeight, targetPercent, enableResize, convertToJpg, sourceMime = '') {
       const cmyk = await isCMYKJpeg(blob);
 
       const img = await new Promise((resolve, reject) => {
@@ -620,7 +664,9 @@
         height = Math.round(height * ratio);
       }
 
-      const outputType = (convertToJpg || cmyk) ? 'image/jpeg' : (blob.type || 'image/jpeg');
+      // Use caller-supplied mime (derived from extension) — blob.type is often '' from JSZip
+      const resolvedMime = sourceMime || blob.type || 'image/jpeg';
+      const outputType = (convertToJpg || cmyk) ? 'image/jpeg' : resolvedMime;
 
       const canvas = document.createElement('canvas');
       canvas.width = width;
