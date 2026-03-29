@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>EPUB Simplified → Traditional Chinese – Toolbox</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      background: #131313;
+      color: #f9f9f9;
+    }
+    h1, h2 {
+      margin-top: 0;
+      margin-bottom: 0.25rem;
+      color: #50e3c2;
+    }
+    .subtitle {
+      margin-top: 0;
+      margin-bottom: 1.5rem;
+      color: #9ca3af;
+      font-size: 0.95rem;
+    }
+    .back-link {
+      display: inline-block;
+      margin-bottom: 1rem;
+      color: #50e3c2;
+      text-decoration: none;
+    }
+    .back-link:hover { text-decoration: underline; }
+    .card {
+      background: #1f1f1f;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      margin-bottom: 1.5rem;
+    }
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1.1rem;
+      font-size: 0.95rem;
+      margin-right: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    button.primary {
+      background: #50e3c2;
+      color: #131313;
+      font-weight: 600;
+    }
+    button.primary:hover:not(:disabled) { background: #3dd4b3; }
+    button:not(.primary) {
+      background: #3a3a3a;
+      color: #f9f9f9;
+    }
+    button:not(.primary):hover:not(:disabled) { background: #4a4a4a; }
+    button:disabled { opacity: 0.6; cursor: default; }
+    .drop-zone {
+      border: 2px dashed #3a3a3a;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      background: #2a2a2a;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .drop-zone.drag-over { border-color: #50e3c2; background: #1a3a35; }
+    .drop-zone.has-file  { border-color: #10b981; background: #064e3b; }
+    .drop-zone .drop-icon { font-size: 3rem; margin-bottom: 1rem; color: #50e3c2; }
+    .drop-zone.has-file .drop-icon { color: #10b981; }
+    .file-input-wrapper { margin-top: 1rem; }
+    .file-input-wrapper input[type="file"] { display: none; }
+    .browse-btn {
+      display: inline-block;
+      padding: 0.6rem 1.1rem;
+      background: #3a3a3a;
+      color: #f9f9f9;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background 0.2s;
+    }
+    .browse-btn:hover { background: #4a4a4a; }
+    .status {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      display: none;
+      z-index: 9999;
+      min-width: 300px;
+      max-width: 500px;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      animation: slideDown 0.3s ease-out;
+    }
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+      to   { opacity: 1; transform: translateX(-50%) translateY(0);     }
+    }
+    .status.success { background: #064e3b; color: #6ee7b7; border: 1px solid #10b981; }
+    .status.error   { background: #7f1d1d; color: #fca5a5; border: 1px solid #dc2626; }
+    .status.info    { background: #1e3a5f; color: #93c5fd; border: 1px solid #2563eb; }
+    .progress { margin-top: 1rem; display: none; }
+    .progress-label { font-size: 0.9rem; color: #9ca3af; margin-bottom: 0.25rem; }
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #2a2a2a;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 0.5rem;
+    }
+    .progress-fill {
+      height: 100%;
+      background: #50e3c2;
+      transition: width 0.3s;
+      width: 0%;
+    }
+    #log {
+      margin-top: 1rem;
+      font-family: monospace;
+      font-size: 0.85rem;
+      color: #9ca3af;
+      white-space: pre-wrap;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <a href="index.html" class="back-link">← Back to Toolbox</a>
+  <h1>EPUB Simplified → Traditional Chinese</h1>
+  <p class="subtitle">
+    Convert all text content in an EPUB from Simplified Chinese to Traditional Chinese.
+    Only text nodes are converted — HTML structure, attributes, CSS, and scripts are untouched.
+  </p>
+
+  <div class="card">
+    <div class="drop-zone" id="drop-zone">
+      <div class="drop-icon" id="drop-icon">📚</div>
+      <div id="drop-text">Drop an EPUB file here, or click to browse</div>
+      <div class="file-input-wrapper">
+        <label class="browse-btn" for="file-input">Browse</label>
+        <input type="file" id="file-input" accept=".epub" />
+      </div>
+    </div>
+
+    <div>
+      <button class="primary" id="convert-btn" disabled>Convert</button>
+      <button id="download-btn" disabled>Download EPUB</button>
+    </div>
+
+    <div class="progress" id="progress">
+      <div class="progress-label" id="progress-label">Processing…</div>
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    </div>
+
+    <div id="log"></div>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script>
+    // ── State ──────────────────────────────────────────────────────────────────
+    let epubFile     = null;
+    let convertedBlob = null;
+
+    // ── DOM refs ───────────────────────────────────────────────────────────────
+    const dropZone      = document.getElementById("drop-zone");
+    const dropText      = document.getElementById("drop-text");
+    const dropIcon      = document.getElementById("drop-icon");
+    const fileInput     = document.getElementById("file-input");
+    const convertBtn    = document.getElementById("convert-btn");
+    const downloadBtn   = document.getElementById("download-btn");
+    const progressDiv   = document.getElementById("progress");
+    const progressFill  = document.getElementById("progress-fill");
+    const progressLabel = document.getElementById("progress-label");
+    const logEl         = document.getElementById("log");
+    const statusEl      = document.getElementById("status");
+
+    // ── UI helpers ─────────────────────────────────────────────────────────────
+    function log(msg) {
+      logEl.textContent += msg + "\n";
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function setProgress(pct, label) {
+      progressFill.style.width = pct + "%";
+      if (label !== undefined) progressLabel.textContent = label;
+    }
+
+    let statusTimer;
+    function showStatus(msg, type = "info") {
+      clearTimeout(statusTimer);
+      statusEl.textContent = msg;
+      statusEl.className = "status " + type;
+      statusEl.style.display = "block";
+      statusTimer = setTimeout(() => { statusEl.style.display = "none"; }, 4000);
+    }
+
+    function setFile(file) {
+      if (!file || !file.name.toLowerCase().endsWith(".epub")) {
+        showStatus("Please select an .epub file.", "error");
+        return;
+      }
+      epubFile      = file;
+      convertedBlob = null;
+      downloadBtn.disabled = true;
+      convertBtn.disabled  = false;
+      dropZone.classList.add("has-file");
+      dropText.textContent = file.name + " (" + (file.size / 1024 / 1024).toFixed(2) + " MB)";
+      dropIcon.textContent = "✓";
+      logEl.textContent    = "";
+    }
+
+    // ── File input events ──────────────────────────────────────────────────────
+    dropZone.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
+
+    dropZone.addEventListener("dragover",  e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+    dropZone.addEventListener("dragleave", ()  => dropZone.classList.remove("drag-over"));
+    dropZone.addEventListener("drop", e => {
+      e.preventDefault();
+      dropZone.classList.remove("drag-over");
+      if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+    });
+
+    // ── Chinese conversion helpers ─────────────────────────────────────────────
+    // Two Private-Use-Area characters as separator between text nodes.
+    // These are unaffected by the zhconvert API and its post-processing rules.
+    const SEPARATOR = "\uE000\uE001";
+
+    async function callZhconvert(text) {
+      const resp = await fetch("/.netlify/functions/zhconvert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text })
+      });
+      if (!resp.ok) throw new Error("zhconvert proxy error: HTTP " + resp.status);
+      const json = await resp.json();
+      return json.data.text;
+    }
+
+    /**
+     * Walk all text nodes under `root` (from `doc`), skipping nodes whose
+     * ancestor is a <style> or <script> element, and skipping whitespace-only nodes.
+     */
+    function collectTextNodes(doc, root) {
+      const nodes = [];
+      const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+          if (!node.nodeValue.trim()) return NodeFilter.FILTER_SKIP;
+          let el = node.parentElement;
+          while (el) {
+            const tag = el.tagName.toLowerCase();
+            if (tag === "style" || tag === "script") return NodeFilter.FILTER_REJECT;
+            el = el.parentElement;
+          }
+          return NodeFilter.FILTER_ACCEPT;
+        }
+      });
+      let node;
+      while ((node = walker.nextNode())) nodes.push(node);
+      return nodes;
+    }
+
+    /**
+     * Convert text nodes in an XHTML/HTML file.
+     * Preserves the original XML declaration + DOCTYPE preamble.
+     */
+    async function convertXhtmlContent(content, filename) {
+      const isXhtml =
+        /\.xhtml$/i.test(filename) ||
+        content.trimStart().startsWith("<?xml") ||
+        content.includes('xmlns="http://www.w3.org/1999/xhtml"');
+      const mime = isXhtml ? "application/xhtml+xml" : "text/html";
+
+      const doc = new DOMParser().parseFromString(content, mime);
+
+      const textNodes = collectTextNodes(doc, doc.documentElement);
+      if (textNodes.length === 0) return content;
+
+      // Batch all text nodes into a single API call, separated by SEPARATOR
+      const combined = textNodes.map(n => n.nodeValue).join(SEPARATOR);
+      const converted = await callZhconvert(combined);
+      const parts = converted.split(SEPARATOR);
+
+      if (parts.length !== textNodes.length) {
+        log(`  Warning: separator mismatch (expected ${textNodes.length}, got ${parts.length}). Keeping original.`);
+        return content;
+      }
+
+      parts.forEach((text, i) => { textNodes[i].nodeValue = text; });
+
+      // Preserve XML declaration / DOCTYPE that XMLSerializer does not emit
+      const preambleMatch = content.match(/^([\s\S]*?)(?=<html[\s>])/i);
+      const preamble = preambleMatch ? preambleMatch[1] : "";
+      return preamble + new XMLSerializer().serializeToString(doc);
+    }
+
+    /**
+     * Convert text nodes in a NCX file (application/x-dtbncx+xml).
+     * NCX is plain XML; text lives in <text> elements inside <navLabel> / <docTitle>.
+     * The generic text-node walker covers all of those.
+     */
+    async function convertNcxContent(content) {
+      const doc = new DOMParser().parseFromString(content, "application/xml");
+      const textNodes = collectTextNodes(doc, doc.documentElement);
+      if (textNodes.length === 0) return content;
+
+      const combined = textNodes.map(n => n.nodeValue).join(SEPARATOR);
+      const converted = await callZhconvert(combined);
+      const parts = converted.split(SEPARATOR);
+
+      if (parts.length !== textNodes.length) {
+        log(`  Warning: separator mismatch in NCX. Keeping original.`);
+        return content;
+      }
+
+      parts.forEach((text, i) => { textNodes[i].nodeValue = text; });
+
+      const preambleMatch = content.match(/^([\s\S]*?)(?=<ncx[\s>])/i);
+      const preamble = preambleMatch ? preambleMatch[1] : "";
+      return preamble + new XMLSerializer().serializeToString(doc);
+    }
+
+    // ── Main conversion ────────────────────────────────────────────────────────
+    convertBtn.addEventListener("click", async () => {
+      if (!epubFile) return;
+      convertBtn.disabled  = true;
+      downloadBtn.disabled = true;
+      convertedBlob        = null;
+      logEl.textContent    = "";
+      progressDiv.style.display = "block";
+      setProgress(0, "Loading EPUB…");
+
+      try {
+        log("Loading EPUB…");
+        const zip = await JSZip.loadAsync(epubFile);
+
+        // Locate OPF via META-INF/container.xml
+        const containerXml = await zip.file("META-INF/container.xml")?.async("text");
+        if (!containerXml) throw new Error("Not a valid EPUB: missing META-INF/container.xml");
+
+        const containerDoc = new DOMParser().parseFromString(containerXml, "application/xml");
+        const opfPath = containerDoc.querySelector("rootfile")?.getAttribute("full-path");
+        if (!opfPath) throw new Error("Cannot find OPF path in container.xml");
+
+        const opfDir = opfPath.includes("/")
+          ? opfPath.substring(0, opfPath.lastIndexOf("/") + 1)
+          : "";
+
+        log("OPF: " + opfPath);
+
+        const opfXml = await zip.file(opfPath)?.async("text");
+        if (!opfXml) throw new Error("Cannot read OPF file: " + opfPath);
+
+        const opfDoc = new DOMParser().parseFromString(opfXml, "application/xml");
+
+        // Collect manifest items that contain text
+        const items = Array.from(opfDoc.querySelectorAll("manifest item")).filter(item => {
+          const mt = item.getAttribute("media-type") || "";
+          return (
+            mt === "application/xhtml+xml" ||
+            mt === "text/html" ||
+            mt === "application/x-dtbncx+xml"
+          );
+        });
+
+        log(`Found ${items.length} text file(s) to convert\n`);
+
+        for (let i = 0; i < items.length; i++) {
+          const item     = items[i];
+          const href     = item.getAttribute("href") || "";
+          const mt       = item.getAttribute("media-type") || "";
+          const filePath = opfDir + decodeURIComponent(href);
+          const shortName = href.split("/").pop();
+
+          setProgress((i / items.length) * 90, `Converting ${i + 1}/${items.length}: ${shortName}`);
+          log(`[${i + 1}/${items.length}] ${filePath}`);
+
+          const original = await zip.file(filePath)?.async("text");
+          if (original == null) {
+            log("  Not found in ZIP, skipping.");
+            continue;
+          }
+
+          const newContent = mt === "application/x-dtbncx+xml"
+            ? await convertNcxContent(original)
+            : await convertXhtmlContent(original, shortName);
+
+          zip.file(filePath, newContent);
+        }
+
+        setProgress(95, "Packaging EPUB…");
+        log("\nPackaging converted EPUB…");
+
+        convertedBlob = await zip.generateAsync({
+          type: "blob",
+          mimeType: "application/epub+zip"
+        });
+
+        setProgress(100, "Done");
+        downloadBtn.disabled = false;
+        log("Done! Click Download to save the converted file.");
+        showStatus("Conversion complete!", "success");
+
+      } catch (e) {
+        log("\nError: " + (e.message || e));
+        showStatus("Error: " + (e.message || e), "error");
+      } finally {
+        convertBtn.disabled = false;
+        setTimeout(() => {
+          progressDiv.style.display = "none";
+          setProgress(0);
+        }, 1500);
+      }
+    });
+
+    // ── Download ───────────────────────────────────────────────────────────────
+    downloadBtn.addEventListener("click", () => {
+      if (!convertedBlob || !epubFile) return;
+      const baseName = epubFile.name.replace(/\.epub$/i, "");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(convertedBlob);
+      a.download = baseName + "-tc.epub";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+  </script>
+</body>
+</html>
