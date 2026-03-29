@@ -1,6 +1,6 @@
 # ebook Publishing Toolbox
 
-## Version: v1.2.0
+## Version: v1.3.0
 
 Professional tools for **ebook creation, conversion, and publishing** — all processing happens **entirely in your browser**. No server uploads, no data transmission, completely privacy-friendly and secure.
 
@@ -22,7 +22,20 @@ Convert HTML files exported from Google Docs or InDesign into professionally for
 - Clean EPUB 3.0 XHTML output with auto-generated table of contents
 - Drag-and-drop UI
 
-### 2. EPUB Image Compression
+### 2. EPUB Simplified → Traditional Chinese
+
+Convert all text content in an EPUB file from Simplified Chinese to Traditional Chinese.
+
+**Features:**
+
+- Converts text nodes only — HTML structure, attributes, CSS, and scripts are untouched
+- Processes all XHTML/HTML content files and the NCX navigation file
+- Batched API calls (≤ 3000 chars each) to stay within serverless timeout limits
+- Preserves original XML declaration and DOCTYPE in every file
+- Output filename suffixed with `-tc`
+- Drag-and-drop UI with per-file progress log
+
+### 3. EPUB Image Compression
 
 Compress and resize all images within an EPUB file. Reduces file size while preserving structure and metadata.
 
@@ -35,7 +48,7 @@ Compress and resize all images within an EPUB file. Reduces file size while pres
 - Skip cover image option with EPUB 2/3 cover detection
 - Drag-and-drop UI with progress tracking
 
-### 3. Image Compression
+### 4. Image Compression
 
 Resize and compress multiple images in the browser.
 
@@ -48,7 +61,7 @@ Resize and compress multiple images in the browser.
 - Per-file download links and "Download all as ZIP"
 - Drag-and-drop UI
 
-### 4. Extract Text from HTML
+### 5. Extract Text from HTML
 
 Extract structured text from HTML/XHTML files while preserving chosen inline tags.
 
@@ -59,7 +72,7 @@ Extract structured text from HTML/XHTML files while preserving chosen inline tag
 - Clean output with unnecessary markup stripped
 - Drag-and-drop UI
 
-### 5. Splitting Text File
+### 6. Splitting Text File
 
 Split text files with chapter markers into multiple segment files.
 
@@ -70,7 +83,7 @@ Split text files with chapter markers into multiple segment files.
 - Downloads all segments as a single ZIP
 - Drag-and-drop UI
 
-### 6. Text → XHTML (with image db)
+### 7. Text → XHTML (with image db)
 
 Convert text chapter files plus an image database CSV into EPUB-style XHTML files.
 
@@ -81,7 +94,7 @@ Convert text chapter files plus an image database CSV into EPUB-style XHTML file
 - Batch processing of multiple chapter files
 - Drag-and-drop UI
 
-### 7. PDF to JPG
+### 8. PDF to JPG
 
 Convert PDF pages to compressed JPG images.
 
@@ -92,7 +105,7 @@ Convert PDF pages to compressed JPG images.
 - Batch processing with ZIP download
 - Drag-and-drop UI
 
-### 8. PDF Compressor
+### 9. PDF Compressor
 
 Compress embedded images inside PDFs while preserving all text, fonts, hyperlinks, bookmarks, and vector graphics.
 
@@ -106,7 +119,7 @@ Compress embedded images inside PDFs while preserving all text, fonts, hyperlink
 - Batch processing with per-file size report and ZIP download
 - Drag-and-drop UI
 
-### 9. Royalty Reporting (Multi-platform)
+### 10. Royalty Reporting (Multi-platform)
 
 Consolidate royalty reports from multiple platforms into unified summaries.
 
@@ -118,7 +131,7 @@ Consolidate royalty reports from multiple platforms into unified summaries.
 - ZIP download of all summaries
 - Drag-and-drop UI
 
-### 10. Extract Content from PDF
+### 11. Extract Content from PDF
 
 Extract text and embedded images from text-based PDFs (no OCR).
 
@@ -130,7 +143,7 @@ Extract text and embedded images from text-based PDFs (no OCR).
 - Rotation-aware image detection
 - Drag-and-drop UI
 
-### 11. Split Double-Span PDF
+### 12. Split Double-Span PDF
 
 Split 2-page spreads (book scans) into individual single pages.
 
@@ -140,7 +153,7 @@ Split 2-page spreads (book scans) into individual single pages.
 - All processing local in the browser
 - Drag-and-drop UI
 
-### 12. Book Cover Grid
+### 13. Book Cover Grid
 
 Combine multiple book cover images into a single grid image.
 
@@ -152,7 +165,7 @@ Combine multiple book cover images into a single grid image.
 - PNG output with live preview
 - Drag-and-drop UI
 
-### 13. Batch Update DOCX Headings
+### 14. Batch Update DOCX Headings
 
 Apply heading styles to Word document paragraphs whose text matches a regular expression.
 
@@ -165,13 +178,13 @@ Apply heading styles to Word document paragraphs whose text matches a regular ex
 - Results preview listing every matched paragraph
 - Drag-and-drop UI
 
-### 14. EPUB Check
+### 15. EPUB Check
 
 Validate EPUB files against the EPUB specification. Identifies structural errors, missing resources, and metadata issues.
 
 Powered by [epubcheck-ts](https://likecoin.github.io/epubcheck-ts/) — opens in a new tab.
 
-### 15. Extract Ebook Metadata
+### 16. Extract Ebook Metadata
 
 Extract metadata from EPUB and PDF files and export to CSV.
 
@@ -211,6 +224,7 @@ Extract metadata from EPUB and PDF files and export to CSV.
 .
 ├── index.html                     # Landing page with tool cards
 ├── gdocs-to-epub.html             # Docs to EPUB converter
+├── epub-s2t.html                  # EPUB Simplified → Traditional Chinese
 ├── epub-image-compress.html       # EPUB Image Compression
 ├── image-compression.html         # Image resizer/compressor
 ├── html-extractor.html            # HTML text extractor
