@@ -343,10 +343,13 @@
       const converted = await convertTextNodesBatched(textNodes);
       converted.forEach((text, i) => { textNodes[i].nodeValue = text; });
 
-      // Preserve XML declaration / DOCTYPE that XMLSerializer does not emit
+      // XMLSerializer prepends <?xml …?> in most browsers; strip it so we
+      // can restore only the original preamble (declaration + DOCTYPE).
+      const serialized = new XMLSerializer().serializeToString(doc)
+        .replace(/^<\?xml[^?]*\?>\s*/, "");
       const preambleMatch = content.match(/^([\s\S]*?)(?=<html[\s>])/i);
       const preamble = preambleMatch ? preambleMatch[1] : "";
-      return preamble + new XMLSerializer().serializeToString(doc);
+      return preamble + serialized;
     }
 
     /**
@@ -362,9 +365,11 @@
       const converted = await convertTextNodesBatched(textNodes);
       converted.forEach((text, i) => { textNodes[i].nodeValue = text; });
 
+      const serialized = new XMLSerializer().serializeToString(doc)
+        .replace(/^<\?xml[^?]*\?>\s*/, "");
       const preambleMatch = content.match(/^([\s\S]*?)(?=<ncx[\s>])/i);
       const preamble = preambleMatch ? preambleMatch[1] : "";
-      return preamble + new XMLSerializer().serializeToString(doc);
+      return preamble + serialized;
     }
 
     // ── Main conversion ────────────────────────────────────────────────────────
