@@ -401,6 +401,9 @@
             : await convertXhtmlContent(original, shortName);
 
           zip.file(filePath, newContent);
+
+          // Brief pause between files to avoid hitting the API rate limit
+          if (i < items.length - 1) await new Promise(r => setTimeout(r, 500));
         }
 
         setProgress(95, "Packaging EPUB…");
