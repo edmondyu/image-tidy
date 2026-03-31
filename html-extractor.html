@@ -464,21 +464,49 @@ processHtmlBtn.addEventListener("click", async () => {
     const els = Array.from(doc.querySelectorAll("h1,h2,h3,h4,h5,h6,p,img"));
     let lines = [];
 
-    els.forEach(el => {
-      if (el.tagName.toLowerCase() === "img") {
+    // Some XHTML/HTML files use <br><br> instead of <p> for paragraphs.
+    // In that case, querySelectorAll("p") finds nothing and all body text is lost.
+    const hasPTags = doc.querySelectorAll("p").length > 0;
+
+    if (!hasPTags && doc.body) {
+      // Extract headings and images normally
+      Array.from(doc.querySelectorAll("h1,h2,h3,h4,h5,h6")).forEach(el => {
+        const tag = el.tagName.toLowerCase();
+        const inner = el.textContent.trim();
+        if (!inner) return;
+        lines.push(preserveSet.has(tag) ? `<${tag}>${inner}</${tag}>` : inner);
+      });
+      Array.from(doc.querySelectorAll("img")).forEach(el => {
         const src = el.getAttribute("src");
         if (src) lines.push("[" + src.split("/").pop() + "]");
-        return;
-      }
-      const tag = el.tagName.toLowerCase();
-      const inner = el.textContent.trim();
-      if (!inner) return;
-      if (preserveSet.has(tag)) {
-        lines.push(`<${tag}>${inner}</${tag}>`);
-      } else {
-        lines.push(inner);
-      }
-    });
+      });
+      // Extract body text treating <br><br> as paragraph breaks
+      const bodyClone = doc.body.cloneNode(true);
+      bodyClone.querySelectorAll("h1,h2,h3,h4,h5,h6,script,style,img").forEach(el => el.remove());
+      let html = bodyClone.innerHTML;
+      html = html.replace(/<br\s*\/?>/gi, "\n");
+      const tmp = document.createElement("div");
+      tmp.innerHTML = html;
+      const rawText = tmp.textContent || "";
+      rawText.split(/\n{2,}/).map(s => s.trim()).filter(s => s).forEach(p => lines.push(p));
+      log(`  → No <p> tags found; extracted ${lines.length} block(s) using <br>-based fallback.`);
+    } else {
+      els.forEach(el => {
+        if (el.tagName.toLowerCase() === "img") {
+          const src = el.getAttribute("src");
+          if (src) lines.push("[" + src.split("/").pop() + "]");
+          return;
+        }
+        const tag = el.tagName.toLowerCase();
+        const inner = el.textContent.trim();
+        if (!inner) return;
+        if (preserveSet.has(tag)) {
+          lines.push(`<${tag}>${inner}</${tag}>`);
+        } else {
+          lines.push(inner);
+        }
+      });
+    }
 
     let mainText = lines.join("\n");
 
