@@ -496,10 +496,17 @@
       const results = [];
 
       docXml = docXml.replace(/<w:p[\s>][\s\S]*?<\/w:p>/g, paraXml => {
+        // Extract text while preserving line breaks (<w:br/>)
         const textParts = [];
-        const tRegex = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
-        let m;
-        while ((m = tRegex.exec(paraXml)) !== null) textParts.push(m[1]);
+        // Split by <w:br/> to handle line breaks
+        const segments = paraXml.split(/<w:br\/>/);
+        segments.forEach((seg, idx) => {
+          const tRegex = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
+          let m;
+          while ((m = tRegex.exec(seg)) !== null) textParts.push(m[1]);
+          // Add newline after each segment except the last
+          if (idx < segments.length - 1) textParts.push('\n');
+        });
         const text = textParts.join('');
         if (!text.trim()) return paraXml;
 
