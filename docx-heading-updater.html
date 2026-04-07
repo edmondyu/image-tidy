@@ -531,13 +531,20 @@
             const testText = textParts.join('\n');
 
             rule.regex.lastIndex = 0;
-            if (rule.regex.test(testText)) {
-              // Mark matched paragraphs
+            const execResult = rule.regex.exec(testText);
+            if (execResult) {
+              // Find paragraphs containing non-empty, non-separator content
+              // Apply style only to "content" paragraphs, not empty or separator-only ones
               window.forEach(idx => {
-                if (!paragraphs[idx].matched) {
-                  paragraphs[idx].matched = true;
-                  paragraphs[idx].appliedLevel = rule.level;
-                  paragraphs[idx].styleId = rule.styleId;
+                const para = paragraphs[idx];
+                const trimmed = para.text.trim();
+                // Skip empty paragraphs and those that are only special characters (likely separators)
+                if (trimmed && !/^[=\-_*#]+$/.test(trimmed)) {
+                  if (!para.matched) {
+                    para.matched = true;
+                    para.appliedLevel = rule.level;
+                    para.styleId = rule.styleId;
+                  }
                 }
               });
               matched = true;
