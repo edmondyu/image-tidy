@@ -515,41 +515,33 @@
 
       // Test rules: each rule tests against sliding windows of consecutive paragraphs
       for (const rule of resolvedRules) {
-        // Test each paragraph individually and in context with neighbors
+        // Test windows of 1-5 consecutive paragraphs to handle patterns spanning multiple paras
         for (let i = 0; i < paragraphs.length; i++) {
-          const para = paragraphs[i];
-          if (para.matched) continue; // Already matched by earlier rule
+          if (paragraphs[i].matched) continue; // Already matched by earlier rule
 
-          // Test against paragraph + next paragraph
-          let testText = para.text;
-          let contextParas = [i];
-
-          if (i < paragraphs.length - 1) {
-            testText = para.text + '\n' + paragraphs[i + 1].text;
-            contextParas = [i, i + 1];
-          }
-
-          // Also test with previous paragraph for patterns that span backwards
-          if (i > 0) {
-            const prevTestText = paragraphs[i - 1].text + '\n' + para.text;
-            rule.regex.lastIndex = 0;
-            if (rule.regex.test(prevTestText)) {
-              contextParas = [i - 1, i];
-              testText = prevTestText;
+          // Try increasingly larger windows: 1, 2, 3, 4, 5 paragraphs
+          let matched = false;
+          for (let windowSize = 1; windowSize <= 5 && i + windowSize - 1 < paragraphs.length && !matched; windowSize++) {
+            const window = [];
+            const textParts = [];
+            for (let j = 0; j < windowSize; j++) {
+              window.push(i + j);
+              textParts.push(paragraphs[i + j].text);
             }
-          }
+            const testText = textParts.join('\n');
 
-          // Test the window
-          rule.regex.lastIndex = 0;
-          if (rule.regex.test(testText)) {
-            // Mark matched paragraphs
-            contextParas.forEach(idx => {
-              if (!paragraphs[idx].matched) {
-                paragraphs[idx].matched = true;
-                paragraphs[idx].appliedLevel = rule.level;
-                paragraphs[idx].styleId = rule.styleId;
-              }
-            });
+            rule.regex.lastIndex = 0;
+            if (rule.regex.test(testText)) {
+              // Mark matched paragraphs
+              window.forEach(idx => {
+                if (!paragraphs[idx].matched) {
+                  paragraphs[idx].matched = true;
+                  paragraphs[idx].appliedLevel = rule.level;
+                  paragraphs[idx].styleId = rule.styleId;
+                }
+              });
+              matched = true;
+            }
           }
         }
       }
