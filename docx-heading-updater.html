@@ -513,40 +513,42 @@
         paragraphs.push({ paraXml, text, matched: false });
       }
 
+      // Build character position map: position -> paragraph index
+      const posMap = [];
+      let charPos = 0;
+      paragraphs.forEach((p, idx) => {
+        for (let i = 0; i < p.text.length; i++) {
+          posMap[charPos + i] = idx;
+        }
+        charPos += p.text.length + 1; // +1 for newline separator
+      });
+
       // Build full document text with newlines between paragraphs
       const fullText = paragraphs.map(p => p.text).join('\n');
 
-      // Test rules against full document text
-      const matchedRanges = [];
+      // Test rules against full document text and map matches to paragraphs
       for (const rule of resolvedRules) {
         rule.regex.lastIndex = 0;
         let ruleMatch;
         while ((ruleMatch = rule.regex.exec(fullText)) !== null) {
-          matchedRanges.push({
-            start: ruleMatch.index,
-            end: ruleMatch.index + ruleMatch[0].length,
-            level: rule.level,
-            styleId: rule.styleId
-          });
-        }
-      }
+          const matchStart = ruleMatch.index;
+          const matchEnd = ruleMatch.index + ruleMatch[0].length;
 
-      // Map character positions back to paragraphs and apply styles
-      let charPos = 0;
-      for (let i = 0; i < paragraphs.length; i++) {
-        const para = paragraphs[i];
-        const paraStart = charPos;
-        const paraEnd = charPos + para.text.length;
-        charPos = paraEnd + 1; // +1 for the newline separator
-
-        // Check if any match overlaps with this paragraph
-        for (const range of matchedRanges) {
-          if (range.start <= paraEnd && range.end >= paraStart) {
-            para.matched = true;
-            para.appliedLevel = range.level;
-            para.styleId = range.styleId;
-            break; // First matching rule wins
+          // Find unique paragraph indices in this match
+          const paraIndices = new Set();
+          for (let pos = matchStart; pos < matchEnd && pos < posMap.length; pos++) {
+            if (posMap[pos] !== undefined) paraIndices.add(posMap[pos]);
           }
+
+          // Apply style to matched paragraphs (first matching rule wins per paragraph)
+          paraIndices.forEach(idx => {
+            const para = paragraphs[idx];
+            if (!para.matched) {
+              para.matched = true;
+              para.appliedLevel = rule.level;
+              para.styleId = rule.styleId;
+            }
+          });
         }
       }
 
