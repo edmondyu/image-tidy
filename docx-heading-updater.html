@@ -495,31 +495,69 @@
 
       const results = [];
 
-      docXml = docXml.replace(/<w:p[\s>][\s\S]*?<\/w:p>/g, paraXml => {
-        // Extract text while preserving line breaks (<w:br/>)
+      // Extract all paragraphs with their XML and text content
+      const paragraphs = [];
+      const paraRegex = /<w:p[\s>][\s\S]*?<\/w:p>/g;
+      let m;
+      while ((m = paraRegex.exec(docXml)) !== null) {
+        const paraXml = m[0];
         const textParts = [];
-        // Split by <w:br/> to handle line breaks
         const segments = paraXml.split(/<w:br\/>/);
         segments.forEach((seg, idx) => {
           const tRegex = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
-          let m;
-          while ((m = tRegex.exec(seg)) !== null) textParts.push(m[1]);
-          // Add newline after each segment except the last
+          let tm;
+          while ((tm = tRegex.exec(seg)) !== null) textParts.push(tm[1]);
           if (idx < segments.length - 1) textParts.push('\n');
         });
         const text = textParts.join('');
-        if (!text.trim()) return paraXml;
+        paragraphs.push({ paraXml, text, matched: false });
+      }
 
-        for (const rule of resolvedRules) {
-          rule.regex.lastIndex = 0;
-          if (!rule.regex.test(text)) continue;
-          const oldStyleMatch = paraXml.match(/<w:pStyle[^>]+w:val="([^"]+)"/);
-          const oldStyle = oldStyleMatch ? oldStyleMatch[1] : '(default)';
-          results.push({ text: text.trim(), oldStyle, level: rule.level });
-          return setParaStyle(paraXml, rule.styleId);
+      // Build full document text with newlines between paragraphs
+      const fullText = paragraphs.map(p => p.text).join('\n');
+
+      // Test rules against full document text
+      const matchedRanges = [];
+      for (const rule of resolvedRules) {
+        rule.regex.lastIndex = 0;
+        let ruleMatch;
+        while ((ruleMatch = rule.regex.exec(fullText)) !== null) {
+          matchedRanges.push({
+            start: ruleMatch.index,
+            end: ruleMatch.index + ruleMatch[0].length,
+            level: rule.level,
+            styleId: rule.styleId
+          });
         }
-        return paraXml;
-      });
+      }
+
+      // Map character positions back to paragraphs and apply styles
+      let charPos = 0;
+      for (let i = 0; i < paragraphs.length; i++) {
+        const para = paragraphs[i];
+        const paraStart = charPos;
+        const paraEnd = charPos + para.text.length;
+        charPos = paraEnd + 1; // +1 for the newline separator
+
+        // Check if any match overlaps with this paragraph
+        for (const range of matchedRanges) {
+          if (range.start <= paraEnd && range.end >= paraStart) {
+            para.matched = true;
+            para.appliedLevel = range.level;
+            para.styleId = range.styleId;
+            break; // First matching rule wins
+          }
+        }
+      }
+
+      // Apply styles to matched paragraphs
+      docXml = paragraphs.map(p => {
+        if (!p.matched) return p.paraXml;
+        const oldStyleMatch = p.paraXml.match(/<w:pStyle[^>]+w:val="([^"]+)"/);
+        const oldStyle = oldStyleMatch ? oldStyleMatch[1] : '(default)';
+        results.push({ text: p.text.trim(), oldStyle, level: p.appliedLevel });
+        return setParaStyle(p.paraXml, p.styleId);
+      }).join('');
 
       if (results.length === 0) return { results, blob: null };
 
