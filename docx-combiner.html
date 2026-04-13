@@ -372,8 +372,19 @@
         baseZip.file('[Content_Types].xml', baseContentTypesXml, { compression: 'DEFLATE' });
       }
 
-      // Generate the combined DOCX
-      const blob = await baseZip.generateAsync({
+      // Generate the combined DOCX, filtering out directory-only entries
+      // Some DOCX tools are strict about not having directory entries in the ZIP
+      const cleanZip = new JSZip();
+
+      // Copy all files from baseZip to cleanZip, skipping directories
+      for (const [path, file] of Object.entries(baseZip.files)) {
+        if (!file.dir) {  // Only copy files, not directories
+          const fileData = await file.async('arraybuffer');
+          cleanZip.file(path, fileData);
+        }
+      }
+
+      const blob = await cleanZip.generateAsync({
         type: 'blob',
         mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         compression: 'DEFLATE'
@@ -441,6 +452,18 @@
       const { map: idMap, nextId: nextRelId } = idMapObj;
       let updatedContentTypesXml = baseContentTypesXml;
 
+      // Built-in files that should be shared and not duplicated
+      const sharedFilePatterns = [
+        'styles.xml',
+        'settings.xml',
+        'webSettings.xml',
+        'fontTable.xml',
+        'theme/',
+        'numbering.xml',
+        'footnotes.xml',
+        'endnotes.xml'
+      ];
+
       const additionalRelships = additionalRelsXml.match(/<Relationship[^>]*\/>/g) || [];
       let newRelships = '';
 
@@ -454,6 +477,12 @@
           const oldId = oldIdMatch[1];
           const newId = idMap[oldId];
           const target = targetMatch[1];
+
+          // Skip relationships to shared files (they should only reference the base/merged versions)
+          const isSharedFile = sharedFilePatterns.some(pattern => target.includes(pattern));
+          if (isSharedFile) {
+            return; // Don't add this relationship
+          }
 
           // Create new relationship
           let newRel = '<Relationship Id="' + newId + '" Type="' + typeMatch[1] + '" Target="' + target + '"';
