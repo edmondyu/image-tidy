@@ -308,7 +308,15 @@
       const bodyMatch = baseDocXml.match(/<w:body>([\s\S]*)<\/w:body>/);
       if (!bodyMatch) throw new Error('Invalid DOCX: missing document body in first file.');
 
-      let combinedBodyContent = bodyMatch[1];
+      // Extract and save the section properties from base document (to use at the end)
+      let baseSectPr = '';
+      const sectPrMatch = bodyMatch[1].match(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/);
+      if (sectPrMatch) {
+        baseSectPr = sectPrMatch[0];
+      }
+
+      // Remove section properties from base document body (will add back at the end)
+      let combinedBodyContent = bodyMatch[1].replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/, '');
 
       // Track maximum relationship ID
       let maxRelId = 1;
@@ -330,9 +338,12 @@
         const additionalBodyMatch = additionalDocXml.match(/<w:body>([\s\S]*)<\/w:body>/);
         if (!additionalBodyMatch) continue;
 
+        // Remove section properties from additional document (only the base document's will be used at the end)
+        let additionalBody = additionalBodyMatch[1].replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/, '');
+
         // Build relationship ID map for this document
         const idMap = buildRelIdMap(additionalRelsXml, maxRelId);
-        const remappedBody = remapBodyRelIds(additionalBodyMatch[1], idMap);
+        const remappedBody = remapBodyRelIds(additionalBody, idMap);
 
         // Add page break before the additional content
         const pageBreak = '<w:p><w:pPr><w:pageBreakBefore/></w:pPr></w:p>';
@@ -353,8 +364,9 @@
         }
       }
 
-      // Reconstruct document.xml with combined body
-      const finalDocXml = baseDocXml.replace(/<w:body>[\s\S]*<\/w:body>/, '<w:body>' + combinedBodyContent + '</w:body>');
+      // Reconstruct document.xml with combined body (add section properties at the very end)
+      const finalBodyContent = combinedBodyContent + (baseSectPr || '');
+      const finalDocXml = baseDocXml.replace(/<w:body>[\s\S]*<\/w:body>/, '<w:body>' + finalBodyContent + '</w:body>');
       baseZip.file('word/document.xml', finalDocXml, { compression: 'DEFLATE' });
 
       // Update styles.xml
