@@ -1526,7 +1526,7 @@ ${bodyContent}
 
       // Convert Google Docs footnote references to EPUB format
       // Handle both formats: with and without id attribute
-      html = html.replace(/<sup>\s*<a[^>]*href="#ftnt(\d+)"[^>]*>\[(\d+)\]<\/a>\s*<\/sup>/gi, (match, num, displayNum) => {
+      html = html.replace(/<sup[^>]*>\s*<a[^>]*href="#ftnt(\d+)"[^>]*>\[(\d+)\]<\/a>\s*<\/sup>/gi, (match, num, displayNum) => {
         return `<sup><a class="noteref" href="#note_${num}" id="back_note_${num}" role="doc-noteref" title="${displayNum}">${displayNum}</a></sup>`;
       });
 
