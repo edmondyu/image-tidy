@@ -232,6 +232,9 @@
       <label>Date range label (used in output filenames & report title)</label>
       <input id="dateString" type="text" value="2024-10-01_to_2025-06-30" />
 
+      <label>TWD → USD exchange rate (used to convert Readmoo <span class="kbd">總金額</span>)</label>
+      <input id="twdToUsd" type="text" value="0.031" />
+
       <label>Upload source reports (multiple files allowed)</label>
       <div class="drop-zone" id="reportDropZone">
         <div class="drop-icon">📊</div>
@@ -240,6 +243,17 @@
         <div class="file-input-wrapper">
           <label for="fileInput" class="browse-btn">Browse Files</label>
           <input id="fileInput" type="file" multiple accept=".csv,.xlsx" />
+        </div>
+      </div>
+
+      <label>Upload title → publisher mapping CSV (optional, columns: <span class="kbd">Name</span>, <span class="kbd">Publisher</span>)</label>
+      <div class="drop-zone" id="mappingDropZone">
+        <div class="drop-icon">🗂️</div>
+        <p><strong>Drag and drop mapping CSV here</strong></p>
+        <p>or</p>
+        <div class="file-input-wrapper">
+          <label for="mappingFileInput" class="browse-btn">Browse File</label>
+          <input id="mappingFileInput" type="file" accept=".csv" />
         </div>
       </div>
 
@@ -258,9 +272,25 @@
 
       <div class="note">
         <strong>Copies rules</strong><br />
-        Google: <span class="kbd">Qty</span> · Readmoo: <span class="kbd">銷售數量</span> · Kobo: <span class="kbd">Paid Units</span> ·
+        Google: <span class="kbd">Qty</span> or <span class="kbd">Net Units Sold</span> · Readmoo: <span class="kbd">銷售數量</span> · Kobo: <span class="kbd">Paid Units</span> ·
         KDP: <span class="kbd">Net Units Sold</span> · HyRead: <span class="kbd">借閱人數</span> when <span class="kbd">備註</span> contains <span class="kbd">單館採購</span> ·
         KoboPlus: not applicable
+      </div>
+
+      <div class="note">
+        <strong>Royalty rules</strong><br />
+        Google: <span class="kbd">Total Publisher Earnings</span> × 0.80 (tax) ·
+        Kobo / KoboPlus: <span class="kbd">Estimated Earnings</span> ·
+        Readmoo: <span class="kbd">總金額</span> × TWD→USD rate × 0.80 (tax) ·
+        HyRead: <span class="kbd">權利金</span> × TWD→USD rate × 0.80 (tax) ·
+        KDP: <span class="kbd">Royalty</span> column
+      </div>
+
+      <div class="note">
+        <strong>Title / Publisher / Author column aliases</strong><br />
+        Title ← <span class="kbd">Title</span> or <span class="kbd">書名</span> ·
+        Publisher ← <span class="kbd">Publisher</span> or <span class="kbd">出版社</span> ·
+        Author ← <span class="kbd">Author</span>, <span class="kbd">Author Name</span>, or <span class="kbd">作者</span>
       </div>
     </div>
 
@@ -294,15 +324,19 @@
 
     const fileInput = document.getElementById('fileInput');
     const reportDropZone = document.getElementById('reportDropZone');
+    const mappingFileInput = document.getElementById('mappingFileInput');
+    const mappingDropZone = document.getElementById('mappingDropZone');
     const processBtn = document.getElementById('processBtn');
     const downloadBtn = document.getElementById('downloadBtn');
     const downloadSummaryBtn = document.getElementById('downloadSummaryBtn');
     const logEl = document.getElementById('log');
     const statusPill = document.getElementById('statusPill');
     const dateStringEl = document.getElementById('dateString');
+    const twdToUsdEl = document.getElementById('twdToUsd');
 
     let lastZipBlobUrl = null;
     let lastSummaryBlobUrl = null;
+    let titleToPublisher = null;
 
     function setStatus(text, type = 'idle') {
       statusPill.textContent = text;
@@ -389,6 +423,51 @@
       }
     });
 
+    async function loadMappingFile(file) {
+      if (!file) {
+        titleToPublisher = null;
+        mappingDropZone.classList.remove('has-file');
+        return;
+      }
+      try {
+        const text = await readFileAsText(file);
+        const parsed = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: false });
+        if (parsed.errors && parsed.errors.length) {
+          log(`⚠️ Mapping CSV parse warnings: ${parsed.errors[0].message}`);
+        }
+        const map = new Map();
+        for (const raw of parsed.data || []) {
+          const row = normalizeKeys(raw);
+          const name = safeString(row['name'], '');
+          const publisher = safeString(row['publisher'], '');
+          if (name && publisher) map.set(name, publisher);
+        }
+        titleToPublisher = map;
+        mappingDropZone.classList.add('has-file');
+        log(`Loaded mapping: ${map.size} title→publisher entries from ${file.name}`);
+      } catch (err) {
+        titleToPublisher = null;
+        mappingDropZone.classList.remove('has-file');
+        log(`❌ Failed to load mapping CSV: ${err.message || err}`);
+      }
+    }
+
+    mappingFileInput.addEventListener('change', () => {
+      const file = (mappingFileInput.files || [])[0] || null;
+      loadMappingFile(file);
+    });
+
+    setupDropZone(mappingDropZone, (e) => {
+      const files = Array.from(e.dataTransfer.files);
+      const csv = files.find(f => f.name.toLowerCase().endsWith('.csv') || f.type === 'text/csv');
+      if (csv) {
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(csv);
+        mappingFileInput.files = dataTransfer.files;
+        loadMappingFile(csv);
+      }
+    });
+
     function detectPlatform(filename) {
       const lower = filename.toLowerCase();
       const sorted = [...PLATFORMS].sort((a, b) => b.length - a.length);
@@ -398,11 +477,26 @@
       return null;
     }
 
+    const COLUMN_ALIASES = {
+      title: ['書名'],
+      publisher: ['出版社'],
+      author: ['作者', 'author name'],
+    };
+
     function normalizeKeys(rowObj) {
       const out = {};
       for (const [k, v] of Object.entries(rowObj || {})) {
         if (k == null) continue;
         out[String(k).trim().toLowerCase()] = v;
+      }
+      for (const [canonical, aliases] of Object.entries(COLUMN_ALIASES)) {
+        if (out[canonical] != null && String(out[canonical]).trim() !== '') continue;
+        for (const a of aliases) {
+          if (out[a] != null && String(out[a]).trim() !== '') {
+            out[canonical] = out[a];
+            break;
+          }
+        }
       }
       return out;
     }
@@ -467,9 +561,29 @@
       return XLSX.utils.sheet_to_json(ws, { defval: '' }) || [];
     }
 
+    function deriveRoyalty(platform, rowLower, twdToUsd) {
+      if (platform === 'readmoo') {
+        return toNumber(rowLower['總金額']) * twdToUsd * 0.8;
+      }
+      if (platform === 'kobo' || platform === 'koboplus') {
+        return toNumber(rowLower['estimated earnings']);
+      }
+      if (platform === 'google') {
+        return toNumber(rowLower['total publisher earnings']) * 0.8;
+      }
+      if (platform === 'hyread') {
+        return toNumber(rowLower['權利金']) * twdToUsd * 0.8;
+      }
+      return toNumber(rowLower['royalty']);
+    }
+
     function deriveCopies(platform, rowLower) {
       // platform is always lowercase; rowLower keys are already lowercased (Chinese keys unchanged)
-      if (platform === 'google') return toNumber(rowLower['qty']);
+      if (platform === 'google') {
+        const qty = rowLower['qty'];
+        if (qty != null && String(qty).trim() !== '') return toNumber(qty);
+        return toNumber(rowLower['net units sold']);
+      }
       if (platform === 'readmoo') return toNumber(rowLower['銷售數量']);
       if (platform === 'kobo') return toNumber(rowLower['paid units']);
       if (platform === 'kdp') return toNumber(rowLower['net units sold']);
@@ -484,11 +598,30 @@
       return 0;
     }
 
-    async function processFiles(files, dateString) {
+    async function processFiles(files, dateString, twdToUsd) {
       setStatus('Processing…', 'ok');
       log(`Starting processing for ${files.length} file(s).`);
+      if (titleToPublisher) {
+        log(`Using title→publisher mapping (${titleToPublisher.size} entries).`);
+      } else {
+        log('No mapping CSV uploaded — falling back to publisher column in reports.');
+      }
 
       const allRows = [];
+      const unmappedTitles = new Set();
+      const lookupCache = new Map();
+      const mappingEntries = titleToPublisher
+        ? [...titleToPublisher.entries()].sort((a, b) => b[0].length - a[0].length)
+        : null;
+      function lookupPublisher(title) {
+        if (lookupCache.has(title)) return lookupCache.get(title);
+        let result = null;
+        for (const [name, pub] of mappingEntries) {
+          if (title.includes(name)) { result = pub; break; }
+        }
+        lookupCache.set(title, result);
+        return result;
+      }
 
       for (const file of files) {
         const platform = detectPlatform(file.name);
@@ -508,14 +641,34 @@
         for (const raw of rawRows) {
           const row = normalizeKeys(raw);
 
-          const royalty = toNumber(row['royalty']);
+          const royalty = deriveRoyalty(platform, row, twdToUsd);
           const title = safeString(row['title'], '(Missing title)');
-          const publisher = safeString(row['publisher'], 'Unknown_Publisher');
+
+          let publisher;
+          if (titleToPublisher) {
+            const mapped = lookupPublisher(title);
+            if (mapped) {
+              publisher = mapped;
+            } else {
+              publisher = 'Unknown_Publisher';
+              if (!unmappedTitles.has(title)) {
+                unmappedTitles.add(title);
+                console.warn(`[Royalty Reporting] No publisher mapping for title: "${title}" (source: ${file.name}, platform: ${platformLabel(platform)})`);
+                log(`⚠️ No publisher mapping for title: "${title}"`);
+              }
+            }
+          } else {
+            publisher = safeString(row['publisher'], 'Unknown_Publisher');
+          }
 
           const copies = deriveCopies(platform, row);
 
           allRows.push({ title, publisher, royalty, copies, platform });
         }
+      }
+
+      if (titleToPublisher && unmappedTitles.size > 0) {
+        log(`⚠️ ${unmappedTitles.size} title(s) had no mapping — assigned to "Unknown_Publisher". See browser console for details.`);
       }
 
       if (allRows.length === 0) {
@@ -635,14 +788,20 @@
 
       const files = [...(fileInput.files || [])];
       const dateString = (dateStringEl.value || '').trim() || 'date_range';
+      const twdToUsd = toNumber(twdToUsdEl.value);
       if (!files.length) return;
+      if (!(twdToUsd > 0)) {
+        setStatus('Error', 'bad');
+        log('❌ TWD→USD rate must be a positive number.');
+        return;
+      }
 
       processBtn.disabled = true;
       downloadBtn.disabled = true;
       downloadSummaryBtn.disabled = true;
 
       try {
-        const { blob, summaryBlob, outputsCount } = await processFiles(files, dateString);
+        const { blob, summaryBlob, outputsCount } = await processFiles(files, dateString, twdToUsd);
         lastZipBlobUrl = URL.createObjectURL(blob);
         lastSummaryBlobUrl = URL.createObjectURL(summaryBlob);
         downloadBtn.disabled = false;
@@ -687,6 +846,21 @@
     });
 
     setStatus('Idle');
+
+    (async () => {
+      try {
+        const res = await fetch('https://open.er-api.com/v6/latest/TWD');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const usd = data && data.rates && Number(data.rates.USD);
+        if (!Number.isFinite(usd) || usd <= 0) throw new Error('Invalid rate in response');
+        twdToUsdEl.value = String(usd);
+        const asOf = data.time_last_update_utc || 'unknown time';
+        log(`Fetched TWD→USD rate: ${usd} (as of ${asOf})`);
+      } catch (err) {
+        log(`⚠️ Could not fetch live TWD→USD rate, using default ${twdToUsdEl.value}: ${err.message || err}`);
+      }
+    })();
   </script>
 </body>
 </html>
