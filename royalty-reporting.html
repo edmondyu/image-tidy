@@ -337,6 +337,12 @@
     let lastZipBlobUrl = null;
     let lastSummaryBlobUrl = null;
     let titleToPublisher = null;
+    const aliasMap = new Map();
+    let aliasLoadPromise = null;
+
+    function canonicalize(normalized) {
+      return aliasMap.get(normalized) || normalized;
+    }
 
     function setStatus(text, type = 'idle') {
       statusPill.textContent = text;
@@ -430,6 +436,7 @@
         return;
       }
       try {
+        if (aliasLoadPromise) await aliasLoadPromise;
         const text = await readFileAsText(file);
         const parsed = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: false });
         if (parsed.errors && parsed.errors.length) {
@@ -440,7 +447,7 @@
           const row = normalizeKeys(raw);
           const name = safeString(row['name'], '');
           const publisher = safeString(row['publisher'], '');
-          const key = normalizeForMatch(name);
+          const key = canonicalize(normalizeForMatch(name));
           if (key && publisher) map.set(key, publisher);
         }
         titleToPublisher = map;
@@ -625,7 +632,7 @@
         : null;
       function lookupPublisher(title) {
         if (lookupCache.has(title)) return lookupCache.get(title);
-        const t = normalizeForMatch(title);
+        const t = canonicalize(normalizeForMatch(title));
         let result = null;
         for (const [name, pub] of mappingEntries) {
           if (name.length < 2 && name !== t) continue;
@@ -858,6 +865,27 @@
     });
 
     setStatus('Idle');
+
+    aliasLoadPromise = (async () => {
+      try {
+        const res = await fetch('title-aliases.csv');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+        let count = 0;
+        for (const r of parsed.data || []) {
+          const canonical = (r.Canonical || '').trim();
+          const alias = (r.Alias || '').trim();
+          if (!canonical || !alias) continue;
+          const k = normalizeForMatch(alias);
+          const v = normalizeForMatch(canonical);
+          if (k && v && k !== v) { aliasMap.set(k, v); count++; }
+        }
+        log(`Loaded ${count} title alias entr${count === 1 ? 'y' : 'ies'} from title-aliases.csv`);
+      } catch (err) {
+        log(`⚠️ Could not load title-aliases.csv: ${err.message || err}`);
+      }
+    })();
 
     (async () => {
       try {
