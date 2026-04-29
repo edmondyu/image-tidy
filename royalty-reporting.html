@@ -658,11 +658,17 @@
 
         log(`  Parsed ${rawRows.length} row(s) from ${file.name}`);
 
+        let titlelessSkipped = 0;
         for (const raw of rawRows) {
           const row = normalizeKeys(raw);
 
+          const title = String(row['title'] == null ? '' : row['title']).trim();
+          if (!title) {
+            titlelessSkipped++;
+            continue;
+          }
+
           const royalty = deriveRoyalty(platform, row, twdToUsd);
-          const title = safeString(row['title'], '(Missing title)');
 
           let publisher;
           if (titleToPublisher) {
@@ -687,6 +693,11 @@
           const titleDisplay = aliasCanonicalDisplay.get(titleKey) || title;
 
           allRows.push({ title: titleDisplay, titleKey, publisher, royalty, copies, platform });
+        }
+
+        if (titlelessSkipped > 0) {
+          console.warn(`[Royalty Reporting] Skipped ${titlelessSkipped} row(s) with empty title in ${file.name} (${platformLabel(platform)})`);
+          log(`⚠️ Skipped ${titlelessSkipped} row(s) with empty title in ${file.name} — likely summary/total rows. Check the source file if any were real data.`);
         }
       }
 
