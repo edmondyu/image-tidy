@@ -230,7 +230,7 @@
   <div class="grid">
     <div class="card">
       <label>Date range label (used in output filenames & report title)</label>
-      <input id="dateString" type="text" value="2024-10-01_to_2025-06-30" />
+      <input id="dateString" type="text" value="" />
 
       <label>TWD → USD exchange rate (used to convert Readmoo <span class="kbd">總金額</span>)</label>
       <input id="twdToUsd" type="text" value="0.031" />
@@ -1215,6 +1215,13 @@
     });
 
     setStatus('Idle');
+
+    (function setDefaultDateRange() {
+      const fmt = (d) => d.toISOString().slice(0, 10);
+      const today = new Date();
+      const start = new Date(today.getTime() - 90 * 86400 * 1000);
+      dateStringEl.value = `${fmt(start)}_to_${fmt(today)}`;
+    })();
 
     aliasLoadPromise = (async () => {
       try {
