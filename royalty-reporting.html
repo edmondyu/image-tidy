@@ -238,11 +238,11 @@
       <label>Upload source reports (multiple files allowed)</label>
       <div class="drop-zone" id="reportDropZone">
         <div class="drop-icon">📊</div>
-        <p><strong>Drag and drop CSV/XLSX files here</strong></p>
+        <p><strong>Drag and drop CSV/XLSX/ZIP files here</strong></p>
         <p>or</p>
         <div class="file-input-wrapper">
           <label for="fileInput" class="browse-btn">Browse Files</label>
-          <input id="fileInput" type="file" multiple accept=".csv,.xlsx" />
+          <input id="fileInput" type="file" multiple accept=".csv,.xlsx,.zip" />
         </div>
       </div>
 
@@ -272,7 +272,7 @@
 
       <div class="note">
         <strong>Copies rules</strong><br />
-        Google: <span class="kbd">Qty</span> or <span class="kbd">Net Units Sold</span> · Readmoo: <span class="kbd">銷售數量</span> · Kobo: <span class="kbd">Paid Units</span> ·
+        Google: <span class="kbd">Qty</span> or <span class="kbd">Net Units Sold</span> · Readmoo: <span class="kbd">銷售數量</span> · Kobo: <span class="kbd">Total Qty</span> ·
         KDP: <span class="kbd">Net Units Sold</span> · HyRead: <span class="kbd">借閱人數</span> when <span class="kbd">備註</span> contains <span class="kbd">單館採購</span> ·
         KoboPlus: not applicable
       </div>
@@ -280,7 +280,8 @@
       <div class="note">
         <strong>Royalty rules</strong><br />
         Google (Transaction Report): <span class="kbd">Payment Amount</span> — already USD, Publisher Revenue % already applied by Google ·
-        Kobo / KoboPlus: <span class="kbd">Estimated Earnings</span> ·
+        Kobo: <span class="kbd">Net Due (Payable Currency)</span> — already USD ·
+        KoboPlus: <span class="kbd">Total in payable currency</span> — already USD ·
         Readmoo: <span class="kbd">總金額</span> × TWD→USD rate × 0.80 (tax) ·
         HyRead: <span class="kbd">權利金</span> × TWD→USD rate × 0.80 (tax) ·
         KDP: <span class="kbd">Royalty</span> column
@@ -419,8 +420,10 @@
       const reportFiles = files.filter(f =>
         f.name.endsWith('.csv') ||
         f.name.endsWith('.xlsx') ||
+        f.name.endsWith('.zip') ||
         f.type === 'text/csv' ||
-        f.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        f.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+        f.type === 'application/zip'
       );
       if (reportFiles.length > 0) {
         const dataTransfer = new DataTransfer();
@@ -479,6 +482,8 @@
 
     function detectPlatform(filename) {
       const lower = filename.toLowerCase();
+      if (/_subs_|sales_invoice_subs/.test(lower)) return 'koboplus';
+      if (/_pub_|sales_invoice_pub/.test(lower)) return 'kobo';
       const sorted = [...PLATFORMS].sort((a, b) => b.length - a.length);
       for (const p of sorted) {
         if (lower.includes(p)) return p;
@@ -488,7 +493,7 @@
 
     const COLUMN_ALIASES = {
       title: ['書名'],
-      publisher: ['出版社', 'imprint name'],
+      publisher: ['出版社', 'imprint name', 'publisher name'],
       author: ['作者', 'author name'],
     };
 
@@ -574,16 +579,51 @@
     async function parseXLSXFile(file) {
       const ab = await readFileAsArrayBuffer(file);
       const wb = XLSX.read(ab, { type: 'array' });
-      const sheetName = wb.SheetNames[0];
+      const sheetName = wb.SheetNames.find(n => n.toLowerCase() === 'details') || wb.SheetNames[0];
       const ws = wb.Sheets[sheetName];
       return XLSX.utils.sheet_to_json(ws, { defval: '' }) || [];
+    }
+
+    async function expandZipFiles(files) {
+      const out = [];
+      for (const file of files) {
+        if (!file.name.toLowerCase().endsWith('.zip')) {
+          out.push(file);
+          continue;
+        }
+        try {
+          const zip = await JSZip.loadAsync(file);
+          let inner = 0;
+          for (const [name, entry] of Object.entries(zip.files)) {
+            if (entry.dir) continue;
+            if (!/\.(xlsx|csv)$/i.test(name)) continue;
+            const blob = await entry.async('blob');
+            const baseName = name.replace(/^.*[\\/]/, '');
+            out.push(new File([blob], baseName, { type: blob.type || '' }));
+            inner++;
+          }
+          log(`Extracted ${inner} file(s) from ${file.name}`);
+        } catch (err) {
+          log(`❌ Failed to extract ${file.name}: ${err.message || err}`);
+        }
+      }
+      return out;
     }
 
     function deriveRoyalty(platform, rowLower, twdToUsd) {
       if (platform === 'readmoo') {
         return toNumber(rowLower['總金額']) * twdToUsd * 0.8;
       }
-      if (platform === 'kobo' || platform === 'koboplus') {
+      if (platform === 'kobo') {
+        const netDue = rowLower['net due (payable currency)'];
+        if (netDue != null && String(netDue).trim() !== '') return toNumber(netDue);
+        const cogsPay = rowLower['cogs (payable currency)'];
+        if (cogsPay != null && String(cogsPay).trim() !== '') return toNumber(cogsPay);
+        return toNumber(rowLower['estimated earnings']);
+      }
+      if (platform === 'koboplus') {
+        const totalPayable = rowLower['total in payable currency'];
+        if (totalPayable != null && String(totalPayable).trim() !== '') return toNumber(totalPayable);
         return toNumber(rowLower['estimated earnings']);
       }
       if (platform === 'google') {
@@ -607,7 +647,11 @@
         return toNumber(rowLower['net units sold']);
       }
       if (platform === 'readmoo') return toNumber(rowLower['銷售數量']);
-      if (platform === 'kobo') return toNumber(rowLower['paid units']);
+      if (platform === 'kobo') {
+        const totalQty = rowLower['total qty'];
+        if (totalQty != null && String(totalQty).trim() !== '') return toNumber(totalQty);
+        return toNumber(rowLower['paid units']);
+      }
       if (platform === 'kdp') return toNumber(rowLower['net units sold']);
 
       if (platform === 'hyread') {
@@ -620,9 +664,10 @@
       return 0;
     }
 
-    async function processFiles(files, dateString, twdToUsd) {
+    async function processFiles(filesIn, dateString, twdToUsd) {
       setStatus('Processing…', 'ok');
-      log(`Starting processing for ${files.length} file(s).`);
+      const files = await expandZipFiles(filesIn);
+      log(`Starting processing for ${files.length} file(s) (expanded from ${filesIn.length} input file(s)).`);
       if (titleToPublisher) {
         log(`Using title→publisher mapping (${titleToPublisher.size} entries).`);
       } else {
