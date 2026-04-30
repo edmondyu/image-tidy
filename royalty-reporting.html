@@ -337,6 +337,28 @@
 
     let lastZipBlobUrl = null;
     let lastSummaryBlobUrl = null;
+    let twdToUsdAsOf = null;
+    let excelJSPromise = null;
+    function ensureExcelJS() {
+      if (excelJSPromise) return excelJSPromise;
+      excelJSPromise = new Promise((resolve, reject) => {
+        if (window.ExcelJS) { resolve(window.ExcelJS); return; }
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+        s.onload = () => resolve(window.ExcelJS);
+        s.onerror = () => reject(new Error('Failed to load ExcelJS'));
+        document.head.appendChild(s);
+      });
+      return excelJSPromise;
+    }
+    const PLATFORM_COLORS = {
+      google: '#4285F4',
+      kobo: '#FF6B35',
+      koboplus: '#FFB44A',
+      readmoo: '#00A86B',
+      kdp: '#FF9900',
+      hyread: '#9B59B6',
+    };
     let titleToPublisher = null;
     const aliasMap = new Map();
     const aliasCanonicalDisplay = new Map();
@@ -639,6 +661,39 @@
       return toNumber(rowLower['royalty']);
     }
 
+    function deriveTimestamp(platform, rowLower) {
+      const candidates = {
+        google: ['transaction date'],
+        kobo: ['date'],
+        koboplus: ['read period'],
+        kdp: ['royalty date'],
+        readmoo: ['訂單 / 退貨'],
+        hyread: ['結算月份'],
+      };
+      const cols = candidates[platform] || [];
+      for (const col of cols) {
+        const v = rowLower[col];
+        if (v == null || String(v).trim() === '') continue;
+        return excelToISOOrString(v);
+      }
+      return '';
+    }
+
+    function excelToISOOrString(v) {
+      const s = String(v).trim();
+      if (/^\d+(\.\d+)?$/.test(s)) {
+        const n = Number(s);
+        if (Number.isFinite(n) && n > 25000 && n < 100000) {
+          const ms = (n - 25569) * 86400 * 1000;
+          try {
+            const d = new Date(ms);
+            return d.toISOString().slice(0, 19).replace('T', ' ');
+          } catch (e) { /* fall through */ }
+        }
+      }
+      return s;
+    }
+
     function deriveCopies(platform, rowLower) {
       // platform is always lowercase; rowLower keys are already lowercased (Chinese keys unchanged)
       if (platform === 'google') {
@@ -664,6 +719,230 @@
       return 0;
     }
 
+    function renderPlatformPieChartPNG(slices, totalRevenue) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 500;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#000000';
+      ctx.font = 'bold 18px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Revenue by Platform (USD)', canvas.width / 2, 32);
+
+      const cx = 240, cy = 280, r = 180;
+      let startAngle = -Math.PI / 2;
+      for (const slice of slices) {
+        const angle = (slice.value / totalRevenue) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, r, startAngle, startAngle + angle);
+        ctx.closePath();
+        ctx.fillStyle = slice.color;
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        startAngle += angle;
+      }
+
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'left';
+      let legendY = 90;
+      for (const slice of slices) {
+        ctx.fillStyle = slice.color;
+        ctx.fillRect(490, legendY, 18, 18);
+        ctx.strokeStyle = '#888888';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(490, legendY, 18, 18);
+        ctx.fillStyle = '#000000';
+        const pct = totalRevenue > 0 ? ((slice.value / totalRevenue) * 100).toFixed(1) : '0.0';
+        ctx.fillText(`${slice.label}: $${slice.value.toFixed(2)}  (${pct}%)`, 518, legendY + 14);
+        legendY += 30;
+      }
+      return canvas.toDataURL('image/png');
+    }
+
+    async function buildSummaryWorkbook(ctx) {
+      const ExcelJSLib = await ensureExcelJS();
+      const wb = new ExcelJSLib.Workbook();
+      wb.creator = 'Royalty Reporting Toolbox';
+      wb.created = new Date();
+
+      // Sheet 1: Platform Summary + pie chart
+      const ws1 = wb.addWorksheet('Platform Summary');
+      ws1.columns = [
+        { header: 'Platform', key: 'platform', width: 16 },
+        { header: 'Sold Copies', key: 'copies', width: 14 },
+        { header: 'Revenue (USD)', key: 'revenue', width: 16 },
+      ];
+      ws1.getRow(1).font = { bold: true };
+      const platformTotals = {};
+      for (const p of PLATFORMS) platformTotals[p] = { copies: 0, revenue: 0 };
+      for (const r of ctx.allRows) {
+        if (platformTotals[r.platform]) {
+          platformTotals[r.platform].copies += (r.copies || 0);
+          platformTotals[r.platform].revenue += (r.royalty || 0);
+        }
+      }
+      for (const p of PLATFORMS) {
+        ws1.addRow({
+          platform: platformLabel(p),
+          copies: Math.round(platformTotals[p].copies),
+          revenue: Math.round(platformTotals[p].revenue * 100) / 100,
+        });
+      }
+      const totalCopies = Object.values(platformTotals).reduce((s, x) => s + x.copies, 0);
+      const totalRevenue = Object.values(platformTotals).reduce((s, x) => s + x.revenue, 0);
+      const totalRow1 = ws1.addRow({
+        platform: 'Total',
+        copies: Math.round(totalCopies),
+        revenue: Math.round(totalRevenue * 100) / 100,
+      });
+      totalRow1.font = { bold: true };
+
+      const slices = PLATFORMS
+        .filter(p => platformTotals[p].revenue > 0)
+        .map(p => ({ label: platformLabel(p), value: platformTotals[p].revenue, color: PLATFORM_COLORS[p] || '#888888' }));
+      if (slices.length > 0 && totalRevenue > 0) {
+        const png = renderPlatformPieChartPNG(slices, totalRevenue);
+        const base64 = png.split(',')[1];
+        const imageId = wb.addImage({ base64, extension: 'png' });
+        ws1.addImage(imageId, { tl: { col: 4, row: 0 }, ext: { width: 600, height: 380 } });
+      }
+
+      // Sheet 2: Per-Publisher Rollup
+      const ws2 = wb.addWorksheet('Per-Publisher');
+      ws2.columns = [
+        { header: 'Publisher', key: 'publisher', width: 32 },
+        { header: 'Titles', key: 'titles', width: 8 },
+        { header: 'Sold Copies', key: 'copies', width: 12 },
+        { header: 'Total Royalty (USD)', key: 'royalty', width: 18 },
+        { header: 'Distribution Fee (10%)', key: 'distFee', width: 22 },
+        { header: 'Withdrawal Fee (USD)', key: 'wdFee', width: 18 },
+        { header: 'Payable (USD)', key: 'payable', width: 14 },
+      ];
+      ws2.getRow(1).font = { bold: true };
+      const pubEntries = [...ctx.byPublisher.entries()].sort((a, b) => {
+        const ar = a[1].reduce((s, r) => s + (r.royalty || 0), 0);
+        const br = b[1].reduce((s, r) => s + (r.royalty || 0), 0);
+        return br - ar;
+      });
+      for (const [publisher, rows] of pubEntries) {
+        const distinctTitles = new Set(rows.map(r => r.titleKey || r.title)).size;
+        const copies = rows.reduce((s, r) => s + (r.copies || 0), 0);
+        const royalty = rows.reduce((s, r) => s + (r.royalty || 0), 0);
+        const distFee = royalty * 0.10;
+        const wdFee = 5;
+        const payable = royalty - distFee - wdFee;
+        ws2.addRow({
+          publisher,
+          titles: distinctTitles,
+          copies: Math.round(copies),
+          royalty: Math.round(royalty * 100) / 100,
+          distFee: Math.round(distFee * 100) / 100,
+          wdFee: wdFee,
+          payable: Math.round(payable * 100) / 100,
+        });
+      }
+
+      // Sheet 3: Top Titles
+      const ws3 = wb.addWorksheet('Top Titles');
+      ws3.columns = [
+        { header: 'Rank', key: 'rank', width: 6 },
+        { header: 'Title', key: 'title', width: 44 },
+        { header: 'Publisher', key: 'publisher', width: 26 },
+        { header: 'Sold Copies', key: 'copies', width: 12 },
+        { header: 'Total Royalty (USD)', key: 'royalty', width: 18 },
+        { header: 'Top Platform', key: 'topPlatform', width: 14 },
+      ];
+      ws3.getRow(1).font = { bold: true };
+      const byTitleKey = new Map();
+      for (const r of ctx.allRows) {
+        const k = r.titleKey || r.title;
+        if (!byTitleKey.has(k)) byTitleKey.set(k, { title: r.title, publisher: r.publisher, copies: 0, royalty: 0, perPlatform: {} });
+        const e = byTitleKey.get(k);
+        e.copies += (r.copies || 0);
+        e.royalty += (r.royalty || 0);
+        e.perPlatform[r.platform] = (e.perPlatform[r.platform] || 0) + (r.royalty || 0);
+      }
+      const topTitles = [...byTitleKey.values()]
+        .sort((a, b) => b.royalty - a.royalty)
+        .slice(0, 20);
+      topTitles.forEach((t, i) => {
+        const top = Object.entries(t.perPlatform).sort((a, b) => b[1] - a[1])[0];
+        ws3.addRow({
+          rank: i + 1,
+          title: t.title,
+          publisher: t.publisher,
+          copies: Math.round(t.copies),
+          royalty: Math.round(t.royalty * 100) / 100,
+          topPlatform: top ? platformLabel(top[0]) : '',
+        });
+      });
+
+      // Sheet 4: Audit
+      const ws4 = wb.addWorksheet('Audit');
+      ws4.columns = [
+        { header: 'Field', key: 'field', width: 32 },
+        { header: 'Value', key: 'value', width: 70 },
+      ];
+      ws4.getRow(1).font = { bold: true };
+      ws4.addRow({ field: 'Date Range', value: ctx.dateString });
+      ws4.addRow({ field: 'Generated At', value: new Date().toISOString() });
+      ws4.addRow({ field: 'TWD → USD Rate', value: ctx.twdToUsd });
+      if (ctx.twdToUsdAsOf) ws4.addRow({ field: 'FX Rate As Of', value: ctx.twdToUsdAsOf });
+      ws4.addRow({ field: 'Alias Entries Loaded', value: ctx.aliasMapSize });
+      ws4.addRow({ field: 'Total Transaction Rows', value: ctx.allRows.length });
+      ws4.addRow({ field: 'Empty-Title Rows Skipped', value: ctx.totalSkipped });
+      ws4.addRow({ field: 'Unmapped Titles', value: ctx.unmappedTitles.length });
+      ws4.addRow({});
+      ws4.addRow({ field: '— Input Files —', value: '' });
+      for (const fm of ctx.fileMeta) {
+        ws4.addRow({ field: fm.platform || '(unknown)', value: `${fm.filename} — ${fm.parsedRows} row(s)${fm.skipped ? `, ${fm.skipped} skipped` : ''}` });
+      }
+      if (ctx.unmappedTitles.length) {
+        ws4.addRow({});
+        ws4.addRow({ field: '— Unmapped Titles —', value: '' });
+        for (const t of ctx.unmappedTitles) ws4.addRow({ field: '', value: t });
+      }
+
+      // Sheet 5: Master Table
+      const ws5 = wb.addWorksheet('Master Table');
+      ws5.columns = [
+        { header: 'Publisher', key: 'publisher', width: 26 },
+        { header: 'Title', key: 'title', width: 44 },
+        { header: 'Timestamp', key: 'timestamp', width: 22 },
+        { header: 'Platform', key: 'platform', width: 12 },
+        { header: 'Copies', key: 'copies', width: 8 },
+        { header: 'Royalty (USD)', key: 'royalty', width: 14 },
+        { header: 'Source File', key: 'source', width: 36 },
+      ];
+      ws5.getRow(1).font = { bold: true };
+      const sortedRows = [...ctx.allRows].sort((a, b) => {
+        const p = String(a.publisher).localeCompare(String(b.publisher));
+        if (p !== 0) return p;
+        const t = String(a.title).localeCompare(String(b.title));
+        if (t !== 0) return t;
+        return String(a.timestamp || '').localeCompare(String(b.timestamp || ''));
+      });
+      for (const r of sortedRows) {
+        ws5.addRow({
+          publisher: r.publisher,
+          title: r.title,
+          timestamp: r.timestamp || '',
+          platform: platformLabel(r.platform),
+          copies: r.copies || 0,
+          royalty: Math.round((r.royalty || 0) * 100) / 100,
+          source: r.sourceFile || '',
+        });
+      }
+
+      const buf = await wb.xlsx.writeBuffer();
+      return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    }
+
     async function processFiles(filesIn, dateString, twdToUsd) {
       setStatus('Processing…', 'ok');
       const files = await expandZipFiles(filesIn);
@@ -676,6 +955,8 @@
 
       const allRows = [];
       const unmappedTitles = new Set();
+      const fileMeta = [];
+      let totalSkipped = 0;
       const lookupCache = new Map();
       const mappingEntries = titleToPublisher
         ? [...titleToPublisher.entries()].sort((a, b) => b[0].length - a[0].length)
@@ -740,9 +1021,18 @@
 
           const titleKey = canonicalize(normalizeForMatch(title));
           const titleDisplay = aliasCanonicalDisplay.get(titleKey) || title;
+          const timestamp = deriveTimestamp(platform, row);
 
-          allRows.push({ title: titleDisplay, titleKey, publisher, royalty, copies, platform });
+          allRows.push({ title: titleDisplay, titleKey, publisher, royalty, copies, platform, timestamp, sourceFile: file.name });
         }
+
+        fileMeta.push({
+          filename: file.name,
+          platform: platformLabel(platform),
+          parsedRows: rawRows.length,
+          skipped: titlelessSkipped,
+        });
+        totalSkipped += titlelessSkipped;
 
         if (titlelessSkipped > 0) {
           console.warn(`[Royalty Reporting] Skipped ${titlelessSkipped} row(s) with empty title in ${file.name} (${platformLabel(platform)})`);
@@ -839,24 +1129,18 @@
         log(`  ✓ Created ${outName} (${table.length} title(s))`);
       }
 
-      // Build platform revenue summary
-      const summaryMap = {};
-      for (const p of PLATFORMS) summaryMap[p] = 0;
-      for (const r of allRows) {
-        if (summaryMap[r.platform] !== undefined) summaryMap[r.platform] += (r.royalty || 0);
-      }
-      const summaryRows = PLATFORMS.map(p => ({
-        Platform: platformLabel(p),
-        Revenue: Math.round(summaryMap[p] * 100) / 100
-      }));
-      const grandTotal = summaryRows.reduce((s, r) => s + r.Revenue, 0);
-      summaryRows.push({ Platform: 'Total', Revenue: Math.round(grandTotal * 100) / 100 });
-
-      const summaryWs = XLSX.utils.json_to_sheet(summaryRows);
-      const summaryWb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(summaryWb, summaryWs, 'Platform Summary');
-      const summaryArrayBuf = XLSX.write(summaryWb, { bookType: 'xlsx', type: 'array' });
-      const summaryBlob = new Blob([summaryArrayBuf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      log('Building summary workbook (5 sheets + pie chart)…');
+      const summaryBlob = await buildSummaryWorkbook({
+        allRows,
+        byPublisher,
+        dateString,
+        twdToUsd,
+        twdToUsdAsOf,
+        fileMeta,
+        totalSkipped,
+        unmappedTitles: [...unmappedTitles],
+        aliasMapSize: aliasMap.size,
+      });
 
       log(`Creating ZIP with ${outputs.length} report(s)…`);
       const zip = new JSZip();
@@ -964,6 +1248,7 @@
         if (!Number.isFinite(usd) || usd <= 0) throw new Error('Invalid rate in response');
         twdToUsdEl.value = String(usd);
         const asOf = data.time_last_update_utc || 'unknown time';
+        twdToUsdAsOf = asOf;
         log(`Fetched TWD→USD rate: ${usd} (as of ${asOf})`);
       } catch (err) {
         log(`⚠️ Could not fetch live TWD→USD rate, using default ${twdToUsdEl.value}: ${err.message || err}`);
